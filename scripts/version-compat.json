@@ -2,10 +2,9 @@
   "latest": "v0.2.0",
   "compatMatrix": [
     {
-      "minOpenclaw": "2026.11.5",
-      "maxOpenclaw": "2026.11.5",
       "exporterVersion": "v0.2.0",
-      "upgradeNote": "This fork supports OpenClaw 2026.11.5 only. Install from the fork checkout; upstream OSS artifacts are not this fork."
+      "upgradeNote": "This fork supports OpenClaw 2026.11.5 only. Install from the fork checkout; upstream OSS artifacts are not this fork.",
+      "openclawVersion": "2026.11.5"
     }
   ]
 }

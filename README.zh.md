@@ -6,17 +6,9 @@
 
 ## 安装
 
-```bash
-git clone https://github.com/liuchuan01/openclaw-exporter-to-langfuse.git
-cd openclaw-exporter-to-langfuse
-git checkout feat/openclaw-2026-11-5
-npm ci
-npm test
-npm pack
-openclaw plugins install ./openclaw-exporter-to-langfuse-0.2.0.tgz
-```
+请按唯一维护的 [INSTALLATION.md](./INSTALLATION.md) 构建、核对和安装本 fork，其中包含本地包信任提示、升级与卸载说明。`scripts/pack.sh` 生成本地 npm 包、commit 信息和 SHA-256，不下载上游 OSS 制品，不自动添加 `--force`。旧安装及卸载脚本已禁用。
 
-参考 [英文 README 的配置示例](./README.md#installation)，配置 endpoint、Authorization 和 `hooks.allowConversationAccess`，重启 Gateway。将配置合并进现有 plugins 设置，保留其他插件。上游 npm 包和 OSS 安装脚本不包含本 fork 的改动。同一请求仅启用一个 Langfuse tracing 插件，避免重复上报。
+配置示例见 [英文 README](./README.md#installation)。
 
 ## 上报结构
 
@@ -47,4 +39,4 @@ runId 隔离请求，session ID 关联会话。消息写入事件只有 sessionK
 
 静态 tags 可以筛选 trace。**本分支尚未实现 Python SDK experiment 关联及请求级自定义 metadata 透传**；先验证原生 trace 结构，之后再接实验链路。Langfuse score 可关联已上报的 trace / observation ID。
 
-开发验证使用 `npm test`，包含 Node 内置测试和 OpenTelemetry 内存 exporter 测试。实测结果见 [VALIDATION.md](./VALIDATION.md)。仓库保留的旧版架构及 OSS 部署文档仅供上游历史参考。
+开发验证使用 `npm test`，包含 Node 内置测试和 OpenTelemetry 内存 exporter 测试。实测结果见 [VALIDATION.md](./VALIDATION.md)。旧架构教程仅供历史参考，安装说明统一维护在 INSTALLATION.md。

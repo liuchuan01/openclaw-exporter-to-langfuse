@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased
+
+### Changed
+- Consolidate fork installation into INSTALLATION.md; remove upstream agent-output mandates and remote installer instructions.
+- Disable legacy install/uninstall entry points and package only local npm artifacts with source commit information and SHA-256 checksums.
+- Express the supported OpenClaw version as an exact version instead of an empty compatibility interval.
+
 ## [0.2.0] - 2026-11-19
 
 ### Changed

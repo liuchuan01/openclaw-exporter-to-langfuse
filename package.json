@@ -8,7 +8,9 @@
     "dist",
     "!dist/onboard-cli*",
     "openclaw.plugin.json",
-    "VERSION"
+    "VERSION",
+    "INSTALLATION.md",
+    "VALIDATION.md"
   ],
   "scripts": {
     "build": "tsc",

@@ -6,17 +6,7 @@ This fork adapts the Alibaba Cloud exporter to **OpenClaw 2026.11.5 only**. Open
 
 ## Installation
 
-Build this fork locally. The upstream npm package and OSS install scripts do not contain these changes.
-
-```bash
-git clone https://github.com/liuchuan01/openclaw-exporter-to-langfuse.git
-cd openclaw-exporter-to-langfuse
-git checkout feat/openclaw-2026-11-5
-npm ci
-npm test
-npm pack
-openclaw plugins install ./openclaw-exporter-to-langfuse-0.2.0.tgz
-```
+Follow [INSTALLATION.md](./INSTALLATION.md) to build, inspect and install this fork. It is the single installation guide, including local-package trust prompts and upgrade/removal guidance. Upstream npm packages and OSS installers do not contain this fork.
 
 Configure the entry in `openclaw.json`, then restart your gateway. Replace the authorization placeholder with base64 of `public-key:secret-key`.
 
@@ -80,4 +70,4 @@ npm test
 npm run build
 ```
 
-Tests use Node's built-in test runner, including an in-memory OpenTelemetry exporter. The exporter retains a private tracer provider and does not replace the gateway's global provider. See [validation notes](./VALIDATION.md) for live checks. Older upstream architecture and deployment material is retained for reference, not as instructions for installing this fork.
+Tests use Node's built-in test runner, including an in-memory OpenTelemetry exporter. The exporter retains a private tracer provider and does not replace the gateway's global provider. See [validation notes](./VALIDATION.md) for live checks. Older architecture tutorials remain historical references; installation is maintained only in INSTALLATION.md.
