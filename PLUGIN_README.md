@@ -1,93 +1,38 @@
 # openclaw-exporter-to-langfuse
 
-## What This Plugin Does
+**English** | [中文](./README.zh.md)
 
-**openclaw-exporter-to-langfuse** is an OpenClaw plugin that exports AI agent execution traces to [Langfuse](https://langfuse.com) via the OpenTelemetry OTLP protocol.
+This fork adapts the Alibaba Cloud exporter to **OpenClaw 2026.11.5 only**. OpenClaw hooks send agent, model and tool observations directly to Langfuse over OTLP. No Python receiver, trajectory sidecars or session database reader is required.
 
-Every time OpenClaw handles an agent request, this plugin captures the full execution chain — including agent invocations, LLM calls, tool executions, token usage, and prompt/response content — and sends them as structured traces to your Langfuse project. This gives you end-to-end visibility into how your agents behave in production.
+## Installation
 
-### How It Works
+Build this fork locally. The upstream npm package and OSS install scripts do not contain these changes.
 
-```
-OpenClaw Runtime
-    │
-    ├─ enter_openclaw_system  (ENTRY span)
-    │     └─ invoke_agent     (AGENT span)
-    │           ├─ chat       (LLM span — prompt, response, token usage)
-    │           └─ execute_tool (TOOL span — tool name, input/output)
-    │
-    └─ [hooks: gateway_start / session_start / session_end /
-               message_received / message_sending / message_sent /
-               llm_input / llm_output / before_message_write /
-               before_tool_call / after_tool_call /
-               before_agent_start / agent_end]
-               │
-               ▼
-    LangfuseExporter
-    (OTLPTraceExporter → BatchSpanProcessor)
-               │
-               ▼
-    Langfuse  /api/public/otel/v1/traces
+```bash
+git clone https://github.com/liuchuan01/openclaw-exporter-to-langfuse.git
+cd openclaw-exporter-to-langfuse
+git checkout feat/openclaw-2026-11-5
+npm ci
+npm test
+npm pack
+openclaw plugins install ./openclaw-exporter-to-langfuse-0.2.0.tgz
 ```
 
-### Reported Spans
-
-| Span name | `gen_ai.span.kind` | Description |
-|---|---|---|
-| `enter_openclaw_system` | `ENTRY` | Request entry point |
-| `invoke_agent` | `AGENT` | Agent invocation |
-| `chat` | `LLM` | LLM call (prompt, response, tokens) |
-| `execute_tool` | `TOOL` | Tool / function call |
-| `session_start` / `session_end` | — | Session lifecycle |
-| `gateway_start` / `gateway_stop` | — | Gateway lifecycle |
-
----
-
-## Configuration
-
-Add the following to your `openclaw.json` to enable the plugin and configure it under `plugins.entries.openclaw-exporter-to-langfuse.config`:
-
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `endpoint` | string | `""` | Langfuse OTLP endpoint (e.g. `https://<LANGFUSE_HOST>/api/public/otel/v1/traces`) |
-| `headers.Authorization` | string | `""` | Langfuse Basic auth header (base64-encoded `pk:sk`) |
-| `serviceName` | string | `"openclaw-agent"` | Service name shown in Langfuse traces |
-| `tags` | string[] | `[]` | Custom Langfuse tags on the root trace span |
-| `userId` | string | `""` | User ID for traces. Defaults to OS username; overrides OS default when configured. Priority: config > OS account > `"unknown"` |
-| `batchSize` | number | `10` | Spans to buffer before flushing |
-| `flushIntervalMs` | number | `5000` | Max ms to wait before flushing buffered spans |
-| `debug` | boolean | `false` | Enable verbose debug logging |
-| `skillTaggingEnabled` | boolean | `false` | Detect and emit `skill:*` tags on tool observations |
-| `skillsRoots` | string[] | `[]` | Explicit skill root directories (skips auto-detection) |
-| `enabledHooks` | string[] | _(all)_ | Restrict which hooks are active |
-
-**Minimal example with Langfuse Cloud:**
-
-> **How to create the `Authorization` header:**
-> 1. Go to your Langfuse project → **Settings → API Keys**
-> 2. Copy your **Public Key** (`pk-lf-xxx`) and **Secret Key** (`sk-lf-yyy`)
-> 3. Generate the Base64-encoded value:
->    ```bash
->    echo -n "pk-lf-xxx:sk-lf-yyy" | base64 -w 0
->    # Example output: cGstbGYteHh4OnNrLWxmLXl5eQ==
->    ```
-> 4. Set `Authorization` to `"Basic <output>"`, e.g. `"Basic cGstbGYteHh4OnNrLWxmLXl5eQ=="`
+Configure the entry in `openclaw.json`, then restart your gateway. Replace the authorization placeholder with base64 of `public-key:secret-key`.
 
 ```json
 {
   "plugins": {
+    "allow": ["openclaw-exporter-to-langfuse"],
     "entries": {
       "openclaw-exporter-to-langfuse": {
         "enabled": true,
-        "hooks": {
-          "allowConversationAccess": true
-        },
+        "hooks": { "allowConversationAccess": true },
         "config": {
-          "endpoint": "http://<LANGFUSE_HOST>/api/public/otel/v1/traces",
-          "headers": {
-            "Authorization": "Basic <base64(pk:sk)>"
-          },
-          "serviceName": "my-openclaw-agent"
+          "endpoint": "https://cloud.langfuse.com/api/public/otel",
+          "headers": { "Authorization": "Basic <base64-public-key-colon-secret-key>" },
+          "serviceName": "openclaw-agent",
+          "tags": ["openclaw-2026.11.5"]
         }
       }
     }
@@ -95,21 +40,44 @@ Add the following to your `openclaw.json` to enable the plugin and configure it 
 }
 ```
 
----
+Merge this entry into your existing configuration, preserving other installed plugins. Enable only one Langfuse tracing plugin for these runs to avoid duplicate exports. This plugin captures conversation content, reasoning when supplied by the model, and tool arguments/results.
 
-## Alibaba Cloud Observability Integration
+## Reported observations
 
-Supports delivering OpenClaw runtime data to Alibaba Cloud ClickHouse **Agent-lens** and the **All-in-one-observe-suite** platform, helping you comprehensively monitor and analyze the runtime status of your Agent applications.
+```text
+invoke_agent (AGENT; one trace per runId)
+├─ react_step (SPAN; provider call / ReAct round)
+│  ├─ model_call (GENERATION)
+│  └─ exec (TOOL)
+│     └─ read (TOOL; Code Mode nested call)
+└─ react_step
+   └─ model_call (GENERATION; final answer)
+```
 
-| Capability | What You Can See | Tool |
-|---|---|---|
-| **Trace → Agent-lens** | Full agent call-chain tree, LLM prompt/response, token usage, per-span latency | [Agent-lens](https://help.aliyun.com/clickhouse/user-guide/agent-lens-overview) |
-| **Trace / Metric / Log → ClickHouse** | Gateway QPS, error rates, system logs, resource metrics — query with AI Notebook | [All-in-one-observe-suite](https://help.aliyun.com/clickhouse/user-guide/all-in-one-observe-suite) |
+| Observation | Input / output |
+|-------------|----------------|
+| Agent | Question / final answer |
+| Generation | Accumulated role-labelled context / assistant text, reasoning and tool calls |
+| Tool | Arguments / result, including error payloads |
+| ReAct step | Structural grouping; no duplicated input/output |
 
-Installation: https://ck-langfuse-public.oss-cn-beijing.aliyuncs.com/openclaw-exporter-to-langfuse/INSTALLATION.md
+Generations use `model_call_started` / `model_call_ended` for provider timing. `before_message_write` supplies assistant output and usage. Input is reconstructed from `llm_input` plus subsequent conversation messages; metadata records `inputSource=openclaw-hooks-reconstructed`. This is not a byte-for-byte provider request: provider transforms or silent compaction can differ. Prepared tool definitions are metadata, not extra chat messages.
 
-Full setup guide: https://help.aliyun.com/clickhouse/user-guide/openclaw-observability
+Nested Code Mode artifacts marked `excludeFromContext` are not inserted into the next generation's context. Nested tools still have their own observations. Failed tools retain their results and ERROR status; recovery does not turn the whole successful agent into an error. Failed provider calls without assistant messages are explicitly marked `outputUnavailable`.
 
----
+Run ID controls trace ownership; session ID groups conversation runs. Because message-write hooks supply only a session key, overlapping runs in the same session cannot always be attributed. In that case the plugin drops ambiguous messages and marks context incomplete instead of mixing their data. Missing terminal events are closed as incomplete on shutdown or after 20 minutes of inactivity.
 
-**Open Source**: https://github.com/aliyun/openclaw-exporter-to-langfuse
+## Configuration
+
+`endpoint` and `headers.Authorization` are required. Existing `serviceName`, `tags`, `userId`, `debug`, `batchSize`, `flushIntervalMs`, `skillsRoots` and `skillTaggingEnabled` settings remain supported. Omit `enabledHooks`: the lifecycle hooks must be enabled together.
+
+Static `tags` can filter these traces. **Python SDK experiment association and per-request custom metadata propagation are not implemented in this branch.** This change establishes and validates the native trace structure first. Langfuse scores can reference the exported trace and observation IDs.
+
+## Development
+
+```bash
+npm test
+npm run build
+```
+
+Tests use Node's built-in test runner, including an in-memory OpenTelemetry exporter. The exporter retains a private tracer provider and does not replace the gateway's global provider. See [validation notes](./VALIDATION.md) for live checks. Older upstream architecture and deployment material is retained for reference, not as instructions for installing this fork.

@@ -1,3 +1,5 @@
+> 此文保留上游历史实现说明。本 fork 仅支持 OpenClaw 2026.11.5，请以 README.zh.md 的安装及链路说明为准。
+
 # OpenClaw Exporter to Langfuse 工作原理详解
 
 <!-- LANGUAGE_SELECTOR_START -->

@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.0] - 2026-11-19
+
+### Changed
+- Pin this fork to OpenClaw 2026.11.5 and expose its compiled `register` entry.
+- Replace older channel/time-window correlation with per-run hook state and explicit nested Code Mode tool parents.
+- Preserve accumulated role-labelled model context, tool errors, disjoint cache usage and provider-measured durations.
+- Close incomplete runs on timeout or service shutdown; mark ambiguous session messages instead of attributing them to another request.
+- Include VERSION in npm packages, exclude the standalone upstream installer CLI, and document installation from this fork.
+
+### Added
+- Node test coverage for message rendering, ReAct history, retries, concurrent runs, cached tool callbacks and real OTel span export.
+
 ## [0.1.5] - 2026-05-22
 
 ### Added

@@ -1,23 +1,11 @@
 {
-  "latest": "v0.1.5",
+  "latest": "v0.2.0",
   "compatMatrix": [
     {
-      "minOpenclaw": "2026.5.4",
-      "maxOpenclaw": "",
-      "exporterVersion": "v0.1.5",
-      "upgradeNote": ""
-    },
-    {
-      "minOpenclaw": "2026.4.24",
-      "maxOpenclaw": "2026.5.4",
-      "exporterVersion": "v0.1.4",
-      "upgradeNote": "Requires setting the plugin's hooks.allowConversationAccess=true; otherwise, full hooks cannot be properly retrieved, leading to abnormal trace delivery."
-    },
-    {
-      "minOpenclaw": "2026.2.29",
-      "maxOpenclaw": "2026.4.24",
-      "exporterVersion": "v0.1.0",
-      "upgradeNote": ""
+      "minOpenclaw": "2026.11.5",
+      "maxOpenclaw": "2026.11.5",
+      "exporterVersion": "v0.2.0",
+      "upgradeNote": "This fork supports OpenClaw 2026.11.5 only. Install from the fork checkout; upstream OSS artifacts are not this fork."
     }
   ]
 }

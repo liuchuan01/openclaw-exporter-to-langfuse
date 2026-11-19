@@ -1,6 +1,7 @@
 import {
   trace,
   context,
+  ROOT_CONTEXT,
   SpanKind,
   SpanStatusCode,
   type Span,
@@ -83,7 +84,7 @@ export class LangfuseExporter {
     });
 
     const spanProcessor = new BatchSpanProcessor(exporter, {
-      maxQueueSize: 100,
+      maxQueueSize: 4096,
       maxExportBatchSize: this.config.batchSize,
       scheduledDelayMillis: this.config.flushIntervalMs,
     });
@@ -131,6 +132,9 @@ export class LangfuseExporter {
 
     const genAiSpanKind = this.mapGenAiSpanKind(spanData.type);
     const spanAttrs = this.flattenAttributes(spanData.attributes);
+    spanAttrs["langfuse.observation.type"] =
+      spanData.type === "model" ? "generation" :
+      ["agent", "tool"].includes(spanData.type) ? spanData.type : "span";
     if (genAiSpanKind) {
       spanAttrs["gen_ai.span.kind"] = genAiSpanKind;
     }
@@ -173,7 +177,11 @@ export class LangfuseExporter {
       }
     }
 
-    span.setStatus({ code: SpanStatusCode.OK });
+    const error = additionalAttrs?.["error.type"];
+    span.setStatus({
+      code: error ? SpanStatusCode.ERROR : SpanStatusCode.OK,
+      ...(error ? { message: String(error) } : {}),
+    });
     span.end(endTime || Date.now());
     this.openSpans.delete(spanId);
 
@@ -318,9 +326,9 @@ export class LangfuseExporter {
     if (parentSpanId) {
       const parentSpan = this.openSpans.get(parentSpanId);
       if (parentSpan) {
-        return trace.setSpan(context.active(), parentSpan);
+        return trace.setSpan(ROOT_CONTEXT, parentSpan);
       }
     }
-    return context.active();
+    return ROOT_CONTEXT;
   }
 }

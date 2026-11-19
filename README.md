@@ -1,176 +1,83 @@
 # openclaw-exporter-to-langfuse
 
-<!-- LANGUAGE_SELECTOR_START -->
 **English** | [中文](./README.zh.md)
-<!-- LANGUAGE_SELECTOR_END -->
 
-An OpenClaw exporter that provides two complementary observability capabilities:
+This fork adapts the Alibaba Cloud exporter to **OpenClaw 2026.11.5 only**. OpenClaw hooks send agent, model and tool observations directly to Langfuse over OTLP. No Python receiver, trajectory sidecars or session database reader is required.
 
-| Capability | Data Path | Focus | Visualization |
-|------------|-----------|-------|---------------|
-| **Langfuse Tracing** | OpenClaw → this exporter → Langfuse | LLM application layer: Agent/LLM/Tool call chains, token usage, prompt/response | Langfuse |
-| **System Observability** (optional) | OpenClaw → diagnostics-otel → otelcol-contrib → ClickHouse | Infrastructure layer: gateway QPS, error rates, system logs, resource metrics | Grafana / HyperDX etc. |
+## Installation
 
-The two capabilities run independently and do not replace each other. For production environments, we recommend enabling both.
+Build this fork locally. The upstream npm package and OSS install scripts do not contain these changes.
 
-On **Alibaba Cloud**, [Agent-lens](https://help.aliyun.com/clickhouse/user-guide/agent-lens-overview) is the managed agent/LLM observability offering built on **ClickHouse** or **SelectDB** plus **Langfuse** (tracing, prompt management, evaluation). It remains compatible with the open Langfuse ecosystem.
-
-For technical details (hook mechanism, span hierarchy, exporter internals, etc.), see [TUTORIAL.md](./TUTORIAL.md).
-
-## Installation / Uninstallation
-
-See [INSTALLATION.md](./scripts/INSTALLATION.md) (for AI agents) for full installation instructions, including:
-
-- One-command install (pk/sk or authorization)
-- Optional otelcol-contrib + ClickHouse integration
-- One-command uninstall (selective component removal)
-- Manual installation
-- Troubleshooting
-
-## Reported Spans
-
-The exporter reports spans following [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/):
-
-| Span | gen_ai.span.kind | Description |
-|------|------------------|-------------|
-| `enter_openclaw_system` | ENTRY | Request entry |
-| `invoke_agent` | AGENT | Agent invocation |
-| `chat` | LLM | LLM call |
-| `execute_tool` | TOOL | Tool execution |
-| `session_start` / `session_end` | -- | Session lifecycle |
-| `gateway_start` / `gateway_stop` | -- | Gateway lifecycle |
-
-## Version Management
-
-### Default OSS Location
-
-All release artifacts are hosted on Alibaba Cloud OSS under:
-
-```
-https://ck-langfuse-public.oss-cn-beijing.aliyuncs.com/openclaw-exporter-to-langfuse/
+```bash
+git clone https://github.com/liuchuan01/openclaw-exporter-to-langfuse.git
+cd openclaw-exporter-to-langfuse
+git checkout feat/openclaw-2026-11-5
+npm ci
+npm test
+npm pack
+openclaw plugins install ./openclaw-exporter-to-langfuse-0.2.0.tgz
 ```
 
-### OSS Directory Structure
-
-```
-<oss-host>/openclaw-exporter-to-langfuse/
-├── version-compat.json          ← compatibility matrix (all versions)
-├── INSTALLATION.md              ← agent-readable installation guide
-├── latest/                      ← always mirrors the latest version (v0.1.2)
-│   ├── install.sh               ← PLUGIN_VERSION="v0.1.2" baked in
-│   ├── uninstall.sh
-│   ├── INSTALLATION.md
-│   └── openclaw-exporter-to-langfuse.tar.gz
-├── v0.1.0/
-│   ├── install.sh               ← PLUGIN_VERSION="v0.1.0" baked in
-│   ├── uninstall.sh
-│   ├── INSTALLATION.md
-│   └── openclaw-exporter-to-langfuse.tar.gz
-├── v0.1.1/
-│   ├── install.sh               ← PLUGIN_VERSION="v0.1.1" baked in
-│   ├── uninstall.sh
-│   ├── INSTALLATION.md
-│   └── openclaw-exporter-to-langfuse.tar.gz
-└── v0.1.2/
-    ├── install.sh               ← PLUGIN_VERSION="v0.1.2" baked in
-    ├── uninstall.sh
-    ├── INSTALLATION.md
-    └── openclaw-exporter-to-langfuse.tar.gz
-```
-
-`version-compat.json` declares which exporter version is compatible with each range of OpenClaw versions. Example:
+Configure the entry in `openclaw.json`, then restart your gateway. Replace the authorization placeholder with base64 of `public-key:secret-key`.
 
 ```json
 {
-  "latest": "v0.1.2",
-  "compatMatrix": [
-    {
-      "minOpenclaw": "2026.4.24",
-      "maxOpenclaw": "",
-      "exporterVersion": "v0.1.2"
-    },
-    {
-      "minOpenclaw": "2026.2.29",
-      "maxOpenclaw": "2026.4.24",
-      "exporterVersion": "v0.1.0"
+  "plugins": {
+    "allow": ["openclaw-exporter-to-langfuse"],
+    "entries": {
+      "openclaw-exporter-to-langfuse": {
+        "enabled": true,
+        "hooks": { "allowConversationAccess": true },
+        "config": {
+          "endpoint": "https://cloud.langfuse.com/api/public/otel",
+          "headers": { "Authorization": "Basic <base64-public-key-colon-secret-key>" },
+          "serviceName": "openclaw-agent",
+          "tags": ["openclaw-2026.11.5"]
+        }
+      }
     }
-  ]
+  }
 }
 ```
 
-### Installation Logic
+Merge this entry into your existing configuration, preserving other installed plugins. Enable only one Langfuse tracing plugin for these runs to avoid duplicate exports. This plugin captures conversation content, reasoning when supplied by the model, and tool arguments/results.
 
-Version selection is handled entirely by the AI agent — the versioned `install.sh` itself only performs a pure single-version install:
+## Reported observations
 
-```
-1. Agent: openclaw --version / -V
-          → extract "2026.5.4"
-
-2. Agent: fetch version-compat.json
-          → match OpenClaw version → exporterVersion = "v0.1.2"
-
-3. Agent: curl .../v0.1.2/install.sh | sudo bash -s -- <flags>
-          (no --exporter-version flag needed or accepted)
-
-4. install.sh: downloads .../v0.1.2/openclaw-exporter-to-langfuse.tar.gz
-               configures openclaw.json
+```text
+invoke_agent (AGENT; one trace per runId)
+├─ react_step (SPAN; provider call / ReAct round)
+│  ├─ model_call (GENERATION)
+│  └─ exec (TOOL)
+│     └─ read (TOOL; Code Mode nested call)
+└─ react_step
+   └─ model_call (GENERATION; final answer)
 ```
 
-Each versioned `install.sh` has `PLUGIN_VERSION` baked in for its own version, so there is no version-selection logic inside the script. If the agent cannot determine the OpenClaw version and the user cannot provide it manually, the agent falls back to using the `latest` version from `version-compat.json`.
+| Observation | Input / output |
+|-------------|----------------|
+| Agent | Question / final answer |
+| Generation | Accumulated role-labelled context / assistant text, reasoning and tool calls |
+| Tool | Arguments / result, including error payloads |
+| ReAct step | Structural grouping; no duplicated input/output |
 
-### Release Flow
+Generations use `model_call_started` / `model_call_ended` for provider timing. `before_message_write` supplies assistant output and usage. Input is reconstructed from `llm_input` plus subsequent conversation messages; metadata records `inputSource=openclaw-hooks-reconstructed`. This is not a byte-for-byte provider request: provider transforms or silent compaction can differ. Prepared tool definitions are metadata, not extra chat messages.
 
-```bash
-# 1. Update VERSION file
-echo "0.1.2" > VERSION
+Nested Code Mode artifacts marked `excludeFromContext` are not inserted into the next generation's context. Nested tools still have their own observations. Failed tools retain their results and ERROR status; recovery does not turn the whole successful agent into an error. Failed provider calls without assistant messages are explicitly marked `outputUnavailable`.
 
-# 2. Build, bake, and package (pack.sh does everything)
-bash scripts/pack.sh
-# Outputs:
-#   release/v0.1.2/install.sh         ← PLUGIN_VERSION="v0.1.2" baked in
-#   release/v0.1.2/uninstall.sh       ← SELF_VERSION="v0.1.2" baked in
-#   release/v0.1.2/INSTALLATION.md    ← version-specific install guide
-#   release/v0.1.2/openclaw-exporter-to-langfuse.tar.gz
-#   release/latest/                   ← identical copy of v0.1.2/
-#   release/version-compat.json
-#   release/INSTALLATION.md
+Run ID controls trace ownership; session ID groups conversation runs. Because message-write hooks supply only a session key, overlapping runs in the same session cannot always be attributed. In that case the plugin drops ambiguous messages and marks context incomplete instead of mixing their data. Missing terminal events are closed as incomplete on shutdown or after 20 minutes of inactivity.
 
-# 3. Upload versioned artifacts to OSS:
-#    oss://ck-langfuse-public/openclaw-exporter-to-langfuse/v0.1.2/
+## Configuration
 
-# 4. Upload latest/ to OSS:
-#    oss://ck-langfuse-public/openclaw-exporter-to-langfuse/latest/
+`endpoint` and `headers.Authorization` are required. Existing `serviceName`, `tags`, `userId`, `debug`, `batchSize`, `flushIntervalMs`, `skillsRoots` and `skillTaggingEnabled` settings remain supported. Omit `enabledHooks`: the lifecycle hooks must be enabled together.
 
-# 5. Upload root-level artifacts to OSS:
-#    oss://ck-langfuse-public/openclaw-exporter-to-langfuse/version-compat.json
-#    oss://ck-langfuse-public/openclaw-exporter-to-langfuse/INSTALLATION.md
-```
-
----
+Static `tags` can filter these traces. **Python SDK experiment association and per-request custom metadata propagation are not implemented in this branch.** This change establishes and validates the native trace structure first. Langfuse scores can reference the exported trace and observation IDs.
 
 ## Development
 
 ```bash
-npm install
-npm run build    # Compile TypeScript
-npm run dev      # Watch mode
+npm test
+npm run build
 ```
 
-### Build & Package
-
-```bash
-bash scripts/pack.sh
-# Output: release/openclaw-exporter-to-langfuse.tar.gz
-```
-
-## License
-
-MIT
-
-## Contact
-
-Scan the QR code to join the DingTalk discussion group:
-
-<img src="https://ck-langfuse-public.oss-cn-beijing.aliyuncs.com/openclaw-exporter-to-langfuse/dingtalk-qr-code.JPG" alt="QR Code" width="200" />
-
-**DingTalk Group**: 180485008966
+Tests use Node's built-in test runner, including an in-memory OpenTelemetry exporter. The exporter retains a private tracer provider and does not replace the gateway's global provider. See [validation notes](./VALIDATION.md) for live checks. Older upstream architecture and deployment material is retained for reference, not as instructions for installing this fork.

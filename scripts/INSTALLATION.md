@@ -1,3 +1,5 @@
+> Upstream reference only. For this OpenClaw 2026.11.5 fork, follow the repository README. Upstream OSS installers do not install this fork.
+
 # openclaw-exporter-to-langfuse Installation
 
 ## Agent Execution Rules

@@ -25,6 +25,11 @@ export interface OpenClawPluginApi {
     warn(message: string): void;
     debug?(message: string): void;
   };
+  registerService(service: {
+    id: string;
+    start(): Promise<void>;
+    stop(): Promise<void>;
+  }): void;
   on<T = unknown>(
     hookName: string,
     handler: (event: T, ctx: PluginHookContext) => Promise<void> | void,
@@ -37,7 +42,7 @@ export interface OpenClawPlugin {
   name: string;
   version: string;
   description: string;
-  activate(api: OpenClawPluginApi): Promise<void> | void;
+  register(api: OpenClawPluginApi): Promise<void> | void;
 }
 
 export interface LangfuseTraceConfig {

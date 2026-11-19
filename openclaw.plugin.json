@@ -1,7 +1,7 @@
 {
   "id": "openclaw-exporter-to-langfuse",
   "name": "OpenClaw Exporter to Langfuse",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Export OpenClaw AI agent execution traces to Langfuse via OpenTelemetry",
   "type": "plugin",
   "entry": "./dist/index.js",
@@ -64,7 +64,7 @@
         "items": {
           "type": "string"
         },
-        "description": "List of hooks to enable (if not set, all hooks are enabled)"
+        "description": "Deprecated: tracing requires all lifecycle hooks. Omit this setting."
       },
       "skillsRoots": {
         "type": "array",
