@@ -18,6 +18,7 @@ rm -rf "${PROJECT_DIR}/release"
 mkdir -p "$OUTPUT_DIR"
 npm pack --ignore-scripts --pack-destination "$OUTPUT_DIR"
 cp INSTALLATION.md README.md VALIDATION.md "$OUTPUT_DIR/"
+cp scripts/install.sh scripts/check-runtime.mjs "$OUTPUT_DIR/"
 
 node --input-type=module - "$OUTPUT_DIR" <<'NODE'
 import { readFileSync, writeFileSync } from "node:fs";
@@ -37,7 +38,7 @@ writeFileSync(join(directory, "build-info.json"), JSON.stringify({
   openclawVersion: pkg.openclaw.build.openclawVersion,
   nodeVersion: process.version,
 }, null, 2) + "\n");
-const files = [`${pkg.name}-${pkg.version}.tgz`, "INSTALLATION.md", "README.md", "VALIDATION.md", "build-info.json"];
+const files = [`${pkg.name}-${pkg.version}.tgz`, "INSTALLATION.md", "README.md", "VALIDATION.md", "install.sh", "check-runtime.mjs", "build-info.json"];
 writeFileSync(join(directory, "SHA256SUMS"), files.map((file) =>
   `${createHash("sha256").update(readFileSync(join(directory, file))).digest("hex")}  ${file}\n`
 ).join(""));

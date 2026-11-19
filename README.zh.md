@@ -6,9 +6,11 @@
 
 ## 安装
 
-请按唯一维护的 [INSTALLATION.md](./INSTALLATION.md) 构建、核对和安装本 fork，其中包含本地包信任提示、升级与卸载说明。`scripts/pack.sh` 生成本地 npm 包、commit 信息和 SHA-256，不下载上游 OSS 制品，不自动添加 `--force`。旧安装及卸载脚本已禁用。
+请按唯一维护的 [INSTALLATION.md](./INSTALLATION.md) 构建、核对和安装本 fork，其中包含本地包信任提示、升级与卸载说明。`scripts/pack.sh` 生成本地 npm 包、commit 信息和 SHA-256，不下载上游 OSS 制品，不自动添加 `--force`。上游 OSS 安装流程已移除，旧卸载脚本保持禁用。本地 `scripts/install.sh` 现在用于宿主授权、热重载和强制自检。
 
-配置示例见 [英文 README](./README.md#installation)。
+配置示例见 [英文 README](./README.md#installation)。逐条配置 endpoint 和鉴权后，务必执行 `bash scripts/install.sh`；它会写入宿主授权，热重载插件并检查 8 个 hook 的数量、名称和 diagnostics。无需为这项授权重启整个网关。
+
+授权位置是 `plugins.entries.openclaw-exporter-to-langfuse.hooks.allowConversationAccess`，与 `config` 同级。插件不能给自己授权，manifest 声明也不构成授权。缺少授权时可能仍显示 loaded/activated，但只注册 5 个 hook，导致没有 trace。
 
 ## 上报结构
 

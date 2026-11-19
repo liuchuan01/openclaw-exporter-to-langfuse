@@ -10,9 +10,15 @@
 
 ## Automated checks
 
-`npm test`: 21 passing Node tests, including upstream skill-tagging tests. New tests cover full ReAct context, tool-call/result rendering, real provider timing, cache accounting, nested tool parents and errors, retries, concurrent run isolation, ambiguous session ownership, duplicate hooks, service shutdown, non-serializable prepared tool callbacks, and late user-message persistence. The exporter test uses real OpenTelemetry spans with an in-memory transport.
+`npm test`: 29 passing Node tests, including upstream skill-tagging tests. New tests cover full ReAct context, tool-call/result rendering, real provider timing, cache accounting, nested tool parents and errors, retries, concurrent run isolation, ambiguous session ownership, duplicate hooks, service shutdown, non-serializable prepared tool callbacks, and late user-message persistence. The exporter test uses real OpenTelemetry spans with an in-memory transport.
 
 `npm pack`: verified VERSION and compiled register entry are included; the upstream standalone installer CLI is excluded. Imported the extracted package successfully with dependencies supplied by the checkout.
+
+## Installation checks
+
+The operator-run setup helper writes `plugins.entries.openclaw-exporter-to-langfuse.hooks.allowConversationAccess`, waits for plugin hot reload and inspects the running gateway. Tests cover the five-hook silent failure, missing hook names despite a count of eight, blocked/error diagnostics, malformed responses, and stopping immediately when grant/reload/check commands fail. The runtime plugin package excludes these host-side helpers; the release directory includes them with checksums.
+
+Live reproduction on 2026.11.5: without the host grant, inspect reported `status=loaded`, `activated=true`, `hookCount=5`. Running the setup helper successfully granted access, reloaded the plugin and passed the eight-hook/no-blocked-diagnostics check. The gateway process ID remained unchanged; no whole-gateway restart was used.
 
 ## Live acceptance
 

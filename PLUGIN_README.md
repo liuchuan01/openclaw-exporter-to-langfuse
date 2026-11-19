@@ -8,7 +8,7 @@ This fork adapts the Alibaba Cloud exporter to **OpenClaw 2026.11.5 only**. Open
 
 Follow [INSTALLATION.md](./INSTALLATION.md) to build, inspect and install this fork. It is the single installation guide, including local-package trust prompts and upgrade/removal guidance. Upstream npm packages and OSS installers do not contain this fork.
 
-Configure the entry in `openclaw.json`, then restart your gateway. Replace the authorization placeholder with base64 of `public-key:secret-key`.
+Configure the entry in `openclaw.json`, then run the authorization/reload helper in [INSTALLATION.md](./INSTALLATION.md#configure-the-endpoint-then-grant-host-authorization). Replace the authorization placeholder with base64 of `public-key:secret-key`.
 
 ```json
 {
@@ -29,6 +29,8 @@ Configure the entry in `openclaw.json`, then restart your gateway. Replace the a
   }
 }
 ```
+
+**`hooks.allowConversationAccess` is a host grant alongside `config`, not a plugin config field. The manifest cannot grant it. When using individual `openclaw config set` commands, do not omit this authorization.** Setup hot-reloads this plugin and requires all eight runtime hooks with no blocked/error diagnostics; loaded/activated status alone is insufficient.
 
 Merge this entry into your existing configuration, preserving other installed plugins. Enable only one Langfuse tracing plugin for these runs to avoid duplicate exports. This plugin captures conversation content, reasoning when supplied by the model, and tool arguments/results.
 

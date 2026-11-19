@@ -5,8 +5,9 @@ All notable changes to this project are documented in this file.
 ## Unreleased
 
 ### Changed
+- Make local setup explicitly grant host conversation access, hot-reload the plugin and fail when runtime hooks are missing or blocked. Remove the misleading manifest authorization field.
 - Consolidate fork installation into INSTALLATION.md; remove upstream agent-output mandates and remote installer instructions.
-- Disable legacy install/uninstall entry points and package only local npm artifacts with source commit information and SHA-256 checksums.
+- Retire upstream download/uninstall workflows and package only local npm artifacts with source commit information and SHA-256 checksums.
 - Express the supported OpenClaw version as an exact version instead of an empty compatibility interval.
 
 ## [0.2.0] - 2026-11-19

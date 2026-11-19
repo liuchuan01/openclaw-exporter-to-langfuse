@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Keep the old entry point from silently installing an upstream artifact.
-cat >&2 <<'MESSAGE'
-The upstream download installer is disabled in this fork.
-Follow INSTALLATION.md in the repository: build with bash scripts/pack.sh,
-then install the reviewed local .tgz with openclaw plugins install.
-No installation or configuration changes were made.
-MESSAGE
-exit 1
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ID="openclaw-exporter-to-langfuse"
+if [[ $# -gt 1 || "${1:-}" == --* ]]; then
+  echo "Usage: bash install.sh [reviewed-local-package.tgz]" >&2
+  echo "Configure endpoint and Authorization before running this setup helper." >&2
+  exit 1
+fi
+if [[ $# -eq 1 ]]; then
+  if [[ ! -f "$1" || "$1" != *.tgz ]]; then
+    echo "Expected a reviewed local .tgz file; remote specs are not accepted." >&2
+    exit 1
+  fi
+  openclaw plugins install "$1"
+fi
+
+# This is an operator-run host configuration change, not plugin self-authorization.
+# Use the same OpenClaw user/profile/state directory as the target gateway.
+openclaw config set "plugins.entries.${PLUGIN_ID}.hooks.allowConversationAccess" true
+openclaw plugins reload "$PLUGIN_ID" --wait
+node "$SCRIPT_DIR/check-runtime.mjs"
