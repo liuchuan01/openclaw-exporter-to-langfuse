@@ -1,0 +1,119 @@
+[
+  {
+    "call": {
+      "type": "toolCall",
+      "id": "rejected-1",
+      "name": "read",
+      "arguments": {
+        "path": "synthetic fixture"
+      }
+    },
+    "result": {
+      "role": "toolResult",
+      "toolCallId": "rejected-1",
+      "toolName": "read",
+      "content": [
+        {
+          "type": "text",
+          "text": "Tool read not found"
+        }
+      ],
+      "details": {},
+      "isError": true
+    }
+  },
+  {
+    "call": {
+      "type": "toolCall",
+      "id": "rejected-2",
+      "name": "apply_patch",
+      "arguments": {
+        "input": "synthetic fixture"
+      }
+    },
+    "result": {
+      "role": "toolResult",
+      "toolCallId": "rejected-2",
+      "toolName": "apply_patch",
+      "content": [
+        {
+          "type": "text",
+          "text": "Tool apply_patch not found"
+        }
+      ],
+      "details": {},
+      "isError": true
+    }
+  },
+  {
+    "call": {
+      "type": "toolCall",
+      "id": "rejected-3",
+      "name": "write",
+      "arguments": {
+        "path": "synthetic fixture",
+        "content": "synthetic fixture"
+      }
+    },
+    "result": {
+      "role": "toolResult",
+      "toolCallId": "rejected-3",
+      "toolName": "write",
+      "content": [
+        {
+          "type": "text",
+          "text": "Tool write not found"
+        }
+      ],
+      "details": {},
+      "isError": true
+    }
+  },
+  {
+    "call": {
+      "type": "toolCall",
+      "id": "rejected-4",
+      "name": "read",
+      "arguments": {
+        "path": "synthetic fixture"
+      }
+    },
+    "result": {
+      "role": "toolResult",
+      "toolCallId": "rejected-4",
+      "toolName": "read",
+      "content": [
+        {
+          "type": "text",
+          "text": "Tool read not found"
+        }
+      ],
+      "details": {},
+      "isError": true
+    }
+  },
+  {
+    "call": {
+      "type": "toolCall",
+      "id": "rejected-5",
+      "name": "write",
+      "arguments": {
+        "path": "synthetic fixture",
+        "content": "synthetic fixture"
+      }
+    },
+    "result": {
+      "role": "toolResult",
+      "toolCallId": "rejected-5",
+      "toolName": "write",
+      "content": [
+        {
+          "type": "text",
+          "text": "Tool write not found"
+        }
+      ],
+      "details": {},
+      "isError": true
+    }
+  }
+]

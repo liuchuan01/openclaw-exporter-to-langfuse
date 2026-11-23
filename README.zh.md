@@ -35,6 +35,10 @@ invoke_agent（AGENT，每个 runId 一条 trace）
 
 runId 隔离请求，session ID 关联会话。消息写入事件只有 sessionKey；同会话多个请求重叠、无法确定归属时，丢弃歧义消息并标记上下文不完整。缺失结束事件的运行在关闭服务或空闲 20 分钟后标为不完整并结束。
 
+不存在的工具等失败尝试，即使没有普通工具 hook，也会从 `isError=true` 的 toolResult 补成 ERROR Tool 节点。必须在同一次运行中唯一匹配模型的 toolCallId 和工具名，保留原始参数、错误输出及所属 ReAct 轮次；正常 hook 优先，不重复创建节点。
+
+补录节点带 `captureSource=tool-result-fallback` 和 `executionTimingAvailable=false`。起止时间相同，表示观察到失败结果的时刻，不代表测量过执行耗时。无法匹配的失败计入 Agent 的 `unattributedToolErrors`，不猜测归属。本修复只影响新运行，不回填历史数据。
+
 ## 配置与范围
 
 保留 `serviceName`、`tags`、`userId`、`debug`、`batchSize`、`flushIntervalMs`、`skillsRoots`、`skillTaggingEnabled`。不要配置 `enabledHooks`，采集所需生命周期事件必须一起启用。插件会采集对话原文、模型提供的 reasoning、工具参数及结果。

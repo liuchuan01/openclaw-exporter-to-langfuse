@@ -47,6 +47,7 @@ type Run = {
   output?: string;
   models: Map<string, Model>;
   tools: Map<string, Tool>;
+  failedToolResults: Map<string, { message: Message; at: number }>;
   steps: Node[];
   queue: Promise<void>;
   lastActivity: number;
@@ -135,7 +136,57 @@ export function createRunTracer(
     seen.set(run.id, now());
     while (seen.size > 1000) seen.delete(seen.keys().next().value!);
   }
-  function finish(run: Run, at: number, error?: string) {
+  async function finish(run: Run, at: number, error?: string) {
+    // Admission failures (for example an unknown tool name) can produce a
+    // toolResult without before/after_tool_call. Wait until the run ends so
+    // real hooks, including delayed hooks, always take precedence.
+    let unattributedToolErrors = 0;
+    for (const [callId, result] of run.failedToolResults) {
+      if (run.tools.has(callId)) continue;
+      const matches = [...run.models.values()].flatMap((model) =>
+        (Array.isArray(model.message?.content) ? model.message.content : [])
+          .filter(
+            (part: Message) => part.type === "toolCall" && part.id === callId,
+          )
+          .map((call: Message) => ({ model, call })),
+      );
+      if (
+        matches.length !== 1 ||
+        (result.message.toolName &&
+          result.message.toolName !== matches[0].call.name)
+      ) {
+        unattributedToolErrors++;
+        continue;
+      }
+      const { model, call } = matches[0];
+      const tool: Tool = {
+        id: id(),
+        start: result.at,
+        end: result.at,
+        callId,
+        finished: true,
+        error: contentText(result.message.content) || "Tool call failed",
+      };
+      run.tools.set(callId, tool);
+      await start(run, tool, call.name, "tool", model.step, {
+        "langfuse.observation.input": jsonAttribute(call.arguments ?? {}),
+        "langfuse.observation.output": jsonAttribute({
+          content: result.message.content ?? [],
+          ...(result.message.details !== undefined
+            ? { details: result.message.details }
+            : {}),
+          isError: true,
+        }),
+        ...meta("toolCallId", callId),
+        ...meta("captureSource", "tool-result-fallback"),
+        ...meta("executionTimingAvailable", false),
+      });
+    }
+    if (unattributedToolErrors)
+      exporter.patchOpenSpanAttributes(
+        run.root.id,
+        meta("unattributedToolErrors", unattributedToolErrors),
+      );
     for (const model of run.models.values()) {
       if (!model.message)
         exporter.patchOpenSpanAttributes(
@@ -278,6 +329,15 @@ export function createRunTracer(
           run.contextReliable = false;
         }
       }
+      if (
+        message.role === "toolResult" &&
+        message.isError === true &&
+        typeof message.toolCallId === "string" &&
+        message.toolCallId &&
+        !run.failedToolResults.has(message.toolCallId)
+      ) {
+        run.failedToolResults.set(message.toolCallId, { message, at });
+      }
       run.history.push(chatMessage(message));
     } else if (name === "before_tool_call") {
       if (!event.toolCallId || run.tools.has(event.toolCallId)) return;
@@ -340,7 +400,7 @@ export function createRunTracer(
           .find((m) => m.role === "assistant");
         if (assistant) run.output = contentText(assistant.content);
       }
-      finish(
+      await finish(
         run,
         at,
         event.success === false ? (event.error ?? "Agent failed") : undefined,
@@ -395,6 +455,7 @@ export function createRunTracer(
         input: event.prompt ?? "",
         models: new Map(),
         tools: new Map(),
+        failedToolResults: new Map(),
         steps: [],
         queue: Promise.resolve(),
         lastActivity: at,

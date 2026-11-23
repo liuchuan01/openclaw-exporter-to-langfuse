@@ -10,7 +10,7 @@
 
 ## Automated checks
 
-`npm test`: 29 passing Node tests, including upstream skill-tagging tests. New tests cover full ReAct context, tool-call/result rendering, real provider timing, cache accounting, nested tool parents and errors, retries, concurrent run isolation, ambiguous session ownership, duplicate hooks, service shutdown, non-serializable prepared tool callbacks, and late user-message persistence. The exporter test uses real OpenTelemetry spans with an in-memory transport.
+`npm test`: 39 passing Node tests, including upstream skill-tagging tests. New tests cover full ReAct context, tool-call/result rendering, real provider timing, cache accounting, nested tool parents and errors, retries, concurrent run isolation, ambiguous session ownership, duplicate hooks, service shutdown, non-serializable prepared tool callbacks, and late user-message persistence. The exporter test uses real OpenTelemetry spans with an in-memory transport.
 
 `npm pack`: verified VERSION and compiled register entry are included; the upstream standalone installer CLI is excluded. Imported the extracted package successfully with dependencies supplied by the checkout.
 
@@ -52,3 +52,13 @@ The browser session has no Langfuse UI login, so verification uses the authentic
 Model input is reconstructed from hooks, not intercepted provider HTTP payloads. Silent provider transformations/compaction are outside this contract. Overlapping runs within one session can produce unassignable session-only message hooks; these are flagged, not guessed. Other OpenClaw versions, multimodal rendering and long-running compaction need separate acceptance tests.
 
 Python SDK experiment linkage and per-request metadata propagation remain a subsequent change. Scores in this validation measure trace data completeness only, not model answer quality.
+
+## 0.2.1 — rejected tool result recovery (2026-11-23)
+
+Five real assistant-call/error-toolResult pairs (`read`, `write`, `apply_patch`) were read from the pinned host transcript. Sanitized fixtures replace customer arguments and identifiers; only the host message shape and fixed error strings remain in the repository.
+
+Regression tests verify ERROR Tool creation with the original call arguments and ReAct parent, deduplication, delayed real-hook precedence, concurrency isolation, unmatched-result reporting, shutdown flushing, and successful recovery without marking the agent as failed.
+
+The five sanitized cases were replayed through the plugin's real OTLP exporter into the test Langfuse project. API readback verified exactly one ERROR Tool per case, matching input/output/toolCallId, first-round parentage, `captureSource=tool-result-fallback`, unavailable execution timing, and successful recovered Agent output. Example replay trace: `c0edf72e9d4a8b7d974bed95f579e1fe` (apply_patch).
+
+This was a replay of captured host messages, not an upgrade or a new live agent run on the customer gateway. Historical traces were not backfilled. The previous audit's background-task lifecycle, abnormal session cleanup and in-flight reload limitations are outside this patch. If a failed result cannot be uniquely matched to an assistant tool call, the agent receives `unattributedToolErrors` rather than an invented tool invocation.

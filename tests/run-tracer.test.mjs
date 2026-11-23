@@ -329,3 +329,296 @@ test("late persistence of the current user message does not duplicate the prompt
   const model = [...f.spans.values()].find((s) => s.type === "model");
   assert.equal(io(model, "input").filter((m) => m.role === "user").length, 1);
 });
+
+// OpenClaw 2026.11.5 admission emits this error toolResult even when the
+// requested name has no tool implementation and no tool hooks are invoked.
+for (const name of ["read", "write", "apply_patch"]) {
+  test(`unknown ${name} becomes an ERROR tool under its original ReAct round`, async () => {
+    const f = fixture();
+    f.start();
+    f.model("request");
+    f.completed("request");
+    const args = { path: "example.txt" };
+    f.message(
+      assistant([{ type: "toolCall", id: "rejected", name, arguments: args }]),
+    );
+    const result = {
+      role: "toolResult",
+      toolCallId: "rejected",
+      toolName: name,
+      content: [text(`Tool ${name} not found`)],
+      details: {},
+      isError: true,
+    };
+    f.message(result);
+    f.message(result); // Repeated terminal notification.
+    f.model("recovery");
+    f.completed("recovery");
+    f.message(assistant([text("recovered")]));
+    f.emit("llm_output", { assistantTexts: ["recovered"] });
+    f.emit("agent_end", { success: true });
+    await f.tracer.drain();
+    const tools = [...f.spans.values()].filter((s) => s.type === "tool");
+    assert.equal(tools.length, 1);
+    const tool = tools[0];
+    const model = [...f.spans.values()].find((s) => s.type === "model");
+    assert.equal(tool.parentSpanId, model.parentSpanId);
+    assert.deepEqual(io(tool, "input"), args);
+    assert.deepEqual(io(tool, "output"), {
+      content: result.content,
+      details: {},
+      isError: true,
+    });
+    assert.equal(tool.attributes["langfuse.observation.level"], "ERROR");
+    assert.equal(
+      tool.attributes["langfuse.observation.status_message"],
+      `Tool ${name} not found`,
+    );
+    assert.equal(
+      tool.attributes["langfuse.observation.metadata.toolCallId"],
+      "rejected",
+    );
+    assert.equal(
+      tool.attributes["langfuse.observation.metadata.captureSource"],
+      "tool-result-fallback",
+    );
+    assert.equal(
+      tool.attributes["langfuse.observation.metadata.executionTimingAvailable"],
+      "false",
+    );
+    assert.equal(tool.startTime, tool.endTime);
+    const root = [...f.spans.values()].find((s) => s.type === "agent");
+    assert.equal(root.attributes["error.type"], undefined);
+    assert.equal(io(root, "output"), "recovered");
+  });
+}
+
+test("real tool hooks take precedence even when the error transcript arrives first", async () => {
+  const f = fixture();
+  f.start();
+  f.model("m");
+  f.completed("m");
+  f.message(
+    assistant([
+      {
+        type: "toolCall",
+        id: "t",
+        name: "read",
+        arguments: { path: "original" },
+      },
+    ]),
+  );
+  f.message({
+    role: "toolResult",
+    toolCallId: "t",
+    toolName: "read",
+    isError: true,
+    content: [text("transcript error")],
+  });
+  f.emit("before_tool_call", {
+    toolCallId: "t",
+    toolName: "read",
+    params: { path: "effective" },
+  });
+  f.emit("after_tool_call", {
+    toolCallId: "t",
+    error: "actual error",
+    result: { content: [text("actual error")] },
+  });
+  f.emit("agent_end", { success: false });
+  await f.tracer.drain();
+  const tools = [...f.spans.values()].filter((s) => s.type === "tool");
+  assert.equal(tools.length, 1);
+  assert.deepEqual(io(tools[0], "input"), { path: "effective" });
+  assert.equal(
+    tools[0].attributes["langfuse.observation.status_message"],
+    "actual error",
+  );
+  assert.equal(
+    tools[0].attributes["langfuse.observation.metadata.captureSource"],
+    undefined,
+  );
+  assert.ok(tools[0].endTime > tools[0].startTime);
+});
+
+test("success text mentioning an unknown tool does not fabricate a failure", async () => {
+  const f = fixture();
+  f.start();
+  f.model("m");
+  f.completed("m");
+  f.message(
+    assistant([{ type: "toolCall", id: "t", name: "read", arguments: {} }]),
+  );
+  f.message({
+    role: "toolResult",
+    toolCallId: "t",
+    toolName: "read",
+    isError: false,
+    content: [text("Tool read not found")],
+  });
+  f.emit("agent_end", { success: true });
+  await f.tracer.drain();
+  assert.equal(
+    [...f.spans.values()].filter((s) => s.type === "tool").length,
+    0,
+  );
+});
+
+test("unmatched failed results are flagged rather than assigned guessed parameters", async () => {
+  const f = fixture();
+  f.start();
+  f.model("m");
+  f.completed("m");
+  f.message(assistant([text("answer")]));
+  f.message({
+    role: "toolResult",
+    toolCallId: "unknown",
+    toolName: "read",
+    isError: true,
+    content: [text("Tool read not found")],
+  });
+  f.emit("agent_end", { success: true });
+  await f.tracer.drain();
+  assert.equal(
+    [...f.spans.values()].filter((s) => s.type === "tool").length,
+    0,
+  );
+  const root = [...f.spans.values()].find((s) => s.type === "agent");
+  assert.equal(
+    root.attributes["langfuse.observation.metadata.unattributedToolErrors"],
+    "1",
+  );
+});
+
+test("shutdown also flushes a rejected tool result", async () => {
+  const f = fixture();
+  f.start();
+  f.model("m");
+  f.completed("m");
+  f.message(
+    assistant([{ type: "toolCall", id: "t", name: "read", arguments: {} }]),
+  );
+  f.message({
+    role: "toolResult",
+    toolCallId: "t",
+    toolName: "read",
+    isError: true,
+    content: [text("Tool read not found")],
+  });
+  await f.tracer.stop();
+  const tool = [...f.spans.values()].find((s) => s.type === "tool");
+  assert.equal(
+    tool.attributes["langfuse.observation.status_message"],
+    "Tool read not found",
+  );
+});
+
+test("replays five sanitized production rejections without losing parameters or errors", async () => {
+  const { readFileSync } = await import("node:fs");
+  const pairs = JSON.parse(
+    readFileSync(
+      new URL("./fixtures/rejected-tools.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  assert.equal(pairs.length, 5);
+  for (const { call, result } of pairs) {
+    const f = fixture();
+    f.start();
+    f.model("m");
+    f.completed("m");
+    f.message(assistant([call]));
+    f.message(result);
+    f.emit("agent_end", { success: true });
+    await f.tracer.drain();
+    const tools = [...f.spans.values()].filter((s) => s.type === "tool");
+    assert.equal(tools.length, 1);
+    assert.deepEqual(io(tools[0], "input"), call.arguments);
+    assert.equal(tools[0].attributes["error.type"], result.content[0].text);
+  }
+});
+
+test("failed results with the same call ID stay isolated across concurrent runs", async () => {
+  const f = fixture();
+  for (const run of ["a", "b"]) {
+    f.start(run);
+    f.emit("model_call_started", { callId: "m", model: "fixture" }, run);
+    f.emit(
+      "model_call_ended",
+      { callId: "m", outcome: "completed", durationMs: 5 },
+      run,
+    );
+    f.emit(
+      "before_message_write",
+      {
+        message: assistant([
+          {
+            type: "toolCall",
+            id: "same",
+            name: "read",
+            arguments: { path: run },
+          },
+        ]),
+      },
+      run,
+    );
+    f.emit(
+      "before_message_write",
+      {
+        message: {
+          role: "toolResult",
+          toolCallId: "same",
+          toolName: "read",
+          isError: true,
+          content: [text(`Tool read not found: ${run}`)],
+        },
+      },
+      run,
+    );
+  }
+  for (const run of ["a", "b"]) f.emit("agent_end", { success: true }, run);
+  await f.tracer.drain();
+  const tools = [...f.spans.values()].filter((s) => s.type === "tool");
+  assert.equal(tools.length, 2);
+  assert.notEqual(tools[0].parentSpanId, tools[1].parentSpanId);
+  for (const tool of tools)
+    assert.equal(
+      tool.attributes["error.type"],
+      `Tool read not found: ${io(tool, "input").path}`,
+    );
+});
+
+test("duplicate tool call IDs across models and mismatched tool names are not guessed", async () => {
+  for (const ambiguous of [false, true]) {
+    const f = fixture();
+    f.start();
+    for (const name of ambiguous ? ["m1", "m2"] : ["m1"]) {
+      f.model(name);
+      f.completed(name);
+      f.message(
+        assistant([
+          { type: "toolCall", id: "same", name: "read", arguments: {} },
+        ]),
+      );
+    }
+    f.message({
+      role: "toolResult",
+      toolCallId: "same",
+      toolName: ambiguous ? "read" : "write",
+      isError: true,
+      content: [text("not found")],
+    });
+    f.emit("agent_end", { success: true });
+    await f.tracer.drain();
+    assert.equal(
+      [...f.spans.values()].filter((s) => s.type === "tool").length,
+      0,
+    );
+    assert.equal(
+      [...f.spans.values()].find((s) => s.type === "agent").attributes[
+        "langfuse.observation.metadata.unattributedToolErrors"
+      ],
+      "1",
+    );
+  }
+});

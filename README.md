@@ -57,6 +57,8 @@ Generations use `model_call_started` / `model_call_ended` for provider timing. `
 
 Nested Code Mode artifacts marked `excludeFromContext` are not inserted into the next generation's context. Nested tools still have their own observations. Failed tools retain their results and ERROR status; recovery does not turn the whole successful agent into an error. Failed provider calls without assistant messages are explicitly marked `outputUnavailable`.
 
+Failed `toolResult` messages without tool hooks (including unknown tool names) also produce ERROR Tool observations when their call ID and name uniquely match an assistant call in the same run. Hook-created observations take precedence, so delayed hooks do not duplicate the tool. Fallback observations carry `captureSource=tool-result-fallback` and `executionTimingAvailable=false`: their timestamp marks when the result was observed, and their zero-length interval is not measured execution time. Unmatched failures are counted as `unattributedToolErrors` on the agent instead of guessing parameters or parents. This applies to newly observed runs; it does not backfill historical traces.
+
 Run ID controls trace ownership; session ID groups conversation runs. Because message-write hooks supply only a session key, overlapping runs in the same session cannot always be attributed. In that case the plugin drops ambiguous messages and marks context incomplete instead of mixing their data. Missing terminal events are closed as incomplete on shutdown or after 20 minutes of inactivity.
 
 ## Configuration

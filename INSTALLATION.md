@@ -24,11 +24,11 @@ For reproducible deployments, use a clean checkout of a recorded commit. A check
 
 ## Install and configure
 
-Inspect the package and compare its checksum with your approved artifact. For version 0.2.0:
+Inspect the package and compare its checksum with your approved artifact. For version 0.2.1:
 
 ```bash
-tar -tzf release/v0.2.0/openclaw-exporter-to-langfuse-0.2.0.tgz
-openclaw plugins install ./release/v0.2.0/openclaw-exporter-to-langfuse-0.2.0.tgz
+tar -tzf release/v0.2.1/openclaw-exporter-to-langfuse-0.2.1.tgz
+openclaw plugins install ./release/v0.2.1/openclaw-exporter-to-langfuse-0.2.1.tgz
 ```
 
 The package includes the compiled plugin, manifest and VERSION; it excludes the standalone upstream onboard CLI. It sends traces directly to the configured Langfuse OTLP endpoint. No collector service or Python OTLP receiver is installed.

@@ -2,7 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
-## Unreleased
+## [0.2.1] - 2026-11-23
+
+### Fixed
+- Recover failed tool results that bypass normal tool hooks (including unknown tool names) as ERROR Tool observations, with original arguments, call ID and ReAct parent.
+- Prefer normal hooks over transcript fallback, mark timing as unavailable, and flag unmatched failures instead of guessing their attribution.
+
+### Added
+- Sanitized production rejection fixtures and regression coverage for recovery, duplicates, delayed hooks, concurrent runs and shutdown.
 
 ### Changed
 - Make local setup explicitly grant host conversation access, hot-reload the plugin and fail when runtime hooks are missing or blocked. Remove the misleading manifest authorization field.
