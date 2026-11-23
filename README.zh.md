@@ -1,48 +1,9 @@
 # openclaw-exporter-to-langfuse
 
-[English](./README.md) | **中文**
+本 fork 的默认 README 已改为中文，请阅读 [README.md](./README.md)。
 
-基于阿里云 exporter 维护的 fork，**仅适配 OpenClaw 2026.11.5**。插件通过运行时 hooks 采集数据，直接以 OTLP 上报 Langfuse，不需要 Python 接收器、`.trajectory.jsonl` 或 SQLite 读取逻辑。
+- [功能、上报结构和配置](./README.md)
+- [源码构建与离线安装](./INSTALLATION.md)
+- [验证记录](./VALIDATION.md)
 
-## 安装
-
-请按唯一维护的 [INSTALLATION.md](./INSTALLATION.md) 构建、核对和安装本 fork，其中包含本地包信任提示、升级与卸载说明。`scripts/pack.sh` 生成本地 npm 包、commit 信息和 SHA-256，不下载上游 OSS 制品，不自动添加 `--force`。上游 OSS 安装流程已移除，旧卸载脚本保持禁用。本地 `scripts/install.sh` 现在用于宿主授权、热重载和强制自检。
-
-配置示例见 [英文 README](./README.md#installation)。逐条配置 endpoint 和鉴权后，务必执行 `bash scripts/install.sh`；它会写入宿主授权，热重载插件并检查 8 个 hook 的数量、名称和 diagnostics。无需为这项授权重启整个网关。
-
-授权位置是 `plugins.entries.openclaw-exporter-to-langfuse.hooks.allowConversationAccess`，与 `config` 同级。插件不能给自己授权，manifest 声明也不构成授权。缺少授权时可能仍显示 loaded/activated，但只注册 5 个 hook，导致没有 trace。
-
-## 上报结构
-
-```text
-invoke_agent（AGENT，每个 runId 一条 trace）
-├─ react_step（本轮分组）
-│  ├─ model_call（GENERATION）
-│  └─ exec（TOOL）
-│     └─ read（Code Mode 内部工具）
-└─ react_step
-   └─ model_call（最终回答）
-```
-
-- Agent：问题、最终答案。
-- Generation：带角色的累积上下文、模型回答、模型提供的 reasoning、工具调用、token 用量与耗时。
-- Tool：参数、结果和错误内容；内部工具挂在外层工具下。
-- ReAct 分组仅组织树结构，不重复存放输入输出。
-
-模型耗时使用 `model_call_started` / `model_call_ended`，不再用消息创建时间推算。模型上下文从 `llm_input` 和后续消息累积重建，标记 `inputSource=openclaw-hooks-reconstructed`；并非供应商实际 HTTP 请求的逐字副本，供应商转换或未发事件的压缩可能造成差异。准备阶段工具定义存入 metadata。
-
-内部工具的 `excludeFromContext` 消息不进入下一轮模型上下文。工具失败保留错误和输出；恢复成功的 Agent 不会整体标为失败。无法匹配输出的模型调用标记 `outputUnavailable`。
-
-runId 隔离请求，session ID 关联会话。消息写入事件只有 sessionKey；同会话多个请求重叠、无法确定归属时，丢弃歧义消息并标记上下文不完整。缺失结束事件的运行在关闭服务或空闲 20 分钟后标为不完整并结束。
-
-不存在的工具等失败尝试，即使没有普通工具 hook，也会从 `isError=true` 的 toolResult 补成 ERROR Tool 节点。必须在同一次运行中唯一匹配模型的 toolCallId 和工具名，保留原始参数、错误输出及所属 ReAct 轮次；正常 hook 优先，不重复创建节点。
-
-补录节点带 `captureSource=tool-result-fallback` 和 `executionTimingAvailable=false`。起止时间相同，表示观察到失败结果的时刻，不代表测量过执行耗时。无法匹配的失败计入 Agent 的 `unattributedToolErrors`，不猜测归属。本修复只影响新运行，不回填历史数据。
-
-## 配置与范围
-
-保留 `serviceName`、`tags`、`userId`、`debug`、`batchSize`、`flushIntervalMs`、`skillsRoots`、`skillTaggingEnabled`。不要配置 `enabledHooks`，采集所需生命周期事件必须一起启用。插件会采集对话原文、模型提供的 reasoning、工具参数及结果。
-
-静态 tags 可以筛选 trace。**本分支尚未实现 Python SDK experiment 关联及请求级自定义 metadata 透传**；先验证原生 trace 结构，之后再接实验链路。Langfuse score 可关联已上报的 trace / observation ID。
-
-开发验证使用 `npm test`，包含 Node 内置测试和 OpenTelemetry 内存 exporter 测试。实测结果见 [VALIDATION.md](./VALIDATION.md)。旧架构教程仅供历史参考，安装说明统一维护在 INSTALLATION.md。
+此文件保留为旧链接入口，避免维护两份不同步的中文说明。
