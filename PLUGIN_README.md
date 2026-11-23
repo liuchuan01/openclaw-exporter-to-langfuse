@@ -2,7 +2,7 @@
 
 **English** | [中文](./README.zh.md)
 
-This fork adapts the Alibaba Cloud exporter to **OpenClaw 2026.11.5 only**. OpenClaw hooks send agent, model and tool observations directly to Langfuse over OTLP. No Python receiver, trajectory sidecars or session database reader is required.
+This fork adapts the Alibaba Cloud exporter to **OpenClaw 2026.11.1 and 2026.11.5**. OpenClaw hooks send agent, model and tool observations directly to Langfuse over OTLP. No Python receiver, trajectory sidecars or session database reader is required.
 
 ## Installation
 
@@ -22,7 +22,7 @@ Configure the entry in `openclaw.json`, then run the authorization/reload helper
           "endpoint": "https://cloud.langfuse.com/api/public/otel",
           "headers": { "Authorization": "Basic <base64-public-key-colon-secret-key>" },
           "serviceName": "openclaw-agent",
-          "tags": ["openclaw-2026.11.5"]
+          "tags": ["openclaw"]
         }
       }
     }

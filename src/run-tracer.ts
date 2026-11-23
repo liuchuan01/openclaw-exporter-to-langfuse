@@ -56,7 +56,7 @@ type Run = {
   awaitingModel: boolean;
 };
 
-/** One request-local state machine for the pinned 2026.11.5 hook contract.
+/** One request-local state machine for the 2026.11.1 / 2026.11.5 hook contract.
  * before_message_write is synchronous; callbacks only enqueue observational
  * work and never return a hook mutation or a Promise to the host.
  */
@@ -64,6 +64,7 @@ export function createRunTracer(
   exporter: Exporter,
   options: {
     now?: () => number;
+    openclawVersion?: string;
     warn?: (message: string) => void;
     tags?: string[];
     userId?: string;
@@ -443,7 +444,9 @@ export function createRunTracer(
         attrs: {
           "langfuse.session.id": String(event.sessionId ?? sessionKey),
           "openclaw.run.id": runId,
-          "openclaw.version": "2026.11.5",
+          ...(options.openclawVersion
+            ? { "openclaw.version": options.openclawVersion }
+            : {}),
           ...meta("runId", runId),
           ...meta("agentId", context.agentId ?? "main"),
           ...(options.userId ? { "langfuse.user.id": options.userId } : {}),

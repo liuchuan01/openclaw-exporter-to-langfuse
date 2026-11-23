@@ -1,5 +1,31 @@
 # Validation — OpenClaw 2026.11.5
 
+## OpenClaw 2026.11.1 compatibility — 2026-11-23
+
+Plugin 0.2.2 was run against an isolated installation of the published OpenClaw
+2026.11.1 package (4ffdd20), using Node 24.19.0. No customer gateway was changed.
+
+- Compared all eight consumed hook event types against the 2026.11.5 source:
+  the event payload contracts are identical.
+- The host rejects `||` compatibility alternatives. Its own compatibility checker
+  accepts `>=2026.11.1 <=2026.11.5` for both boundary versions and rejects
+  2026.10.31 and 2026.11.6. Intermediate versions have not been individually run.
+- Runtime self-check passed: loaded/enabled/activated, all eight hooks registered,
+  no blocked/error diagnostics, and hot reload succeeded.
+- A real DeepSeek run read the synthetic workspace file `compat.txt` and returned
+  its `ORCHID-42` value. The plugin exported directly to the test Langfuse project.
+- Official Langfuse CLI readback confirmed six observations: one Agent, two
+  Generations, two ReAct groups and one `read` Tool. Agent/model/tool input and
+  output, generation usage, parent relationships and host version `2026.11.1`
+  were verified. Trace ID: `ae8331a6351cef0da096b276723a0fcf`.
+- 40 local tests pass, including the failed-tool fallback regression suite and
+  actual/unknown host-version metadata. Unknown-tool failures on 11.1 were not
+  separately triggered in this live smoke test.
+
+The `openclaw.build` fields retain the original build SDK baseline, 2026.11.5;
+`openclaw.compat.pluginApi` is the supported host range. Trace version metadata
+comes from `api.runtime.version`, not the build baseline.
+
 ## Environment
 
 - OpenClaw image: `ghcr.io/openclaw/openclaw@sha256:9c74476e3e79b5a1595fd5cf904286eaba3471c10c640aaa9a361a89b41d0882` (2026.11.5).

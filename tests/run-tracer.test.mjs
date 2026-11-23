@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createRunTracer } from "../dist/run-tracer.js";
 
-function fixture() {
+function fixture(options = {}) {
   const spans = new Map();
   let clock = 1000;
   const tracer = createRunTracer(
@@ -21,7 +21,7 @@ function fixture() {
         Object.assign(span.attributes, attrs);
       },
     },
-    { now: () => clock, warn: (m) => assert.fail(m) },
+    { now: () => clock, warn: (m) => assert.fail(m), ...options },
   );
   const emit = (name, event = {}, runId = "run", sessionKey = runId) => {
     clock += 10;
@@ -620,5 +620,18 @@ test("duplicate tool call IDs across models and mismatched tool names are not gu
       ],
       "1",
     );
+  }
+});
+
+
+test("trace records the actual host version without assuming the build version", async () => {
+  for (const version of ["2026.11.1", "2026.11.5", undefined]) {
+    const f = fixture({ openclawVersion: version });
+    f.start();
+    f.emit("agent_end", { success: true });
+    await f.tracer.stop();
+    const root = [...f.spans.values()].find((span) => span.name === "invoke_agent");
+    assert.equal(root.attributes["openclaw.version"], version);
+    assert.equal(Object.hasOwn(root.attributes, "openclaw.version"), version !== undefined);
   }
 });

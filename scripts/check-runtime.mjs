@@ -14,7 +14,7 @@ export const REQUIRED_HOOKS = [
   "before_message_write",
 ];
 
-/** Validate the pinned OpenClaw 2026.11.5 runtime inspect response. */
+/** Validate the supported OpenClaw runtime inspect response. */
 export function assertRuntime(report) {
   const plugin = report?.plugin;
   if (

@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.2] - 2026-11-23
+
+### Changed
+- Support OpenClaw 2026.11.1 alongside 2026.11.5 with a bounded compatibility range.
+- Record the runtime host version on traces instead of hardcoding the build host version; omit it when unavailable.
+- Document the supported versions and Node requirement for offline installation.
+
 ## [0.2.1] - 2026-11-23
 
 ### Fixed

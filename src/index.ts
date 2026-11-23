@@ -72,6 +72,7 @@ const langfuseTracePlugin: OpenClawPlugin = {
     const tracer = createRunTracer(exporter, {
       userId,
       tags,
+      openclawVersion: api.runtime?.version,
       warn: (message) => api.logger.warn(message),
       toolAttributes(name, params): Record<string, string | number | boolean> {
         const detected = skills
@@ -113,7 +114,7 @@ const langfuseTracePlugin: OpenClawPlugin = {
       },
     });
     api.logger.info(
-      `[LangfuseTrace] Registered OpenClaw 2026.11.5 tracing (service=${config.serviceName})`,
+      `[LangfuseTrace] Registered OpenClaw tracing (service=${config.serviceName})`,
     );
   },
 };

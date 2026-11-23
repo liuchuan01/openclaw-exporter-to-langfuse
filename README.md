@@ -1,6 +1,8 @@
 # openclaw-exporter-to-langfuse
 
-基于阿里云 exporter 维护的 fork，**仅适配 OpenClaw 2026.11.5，当前插件版本 0.2.1**。通过 OpenClaw 原生 hooks 采集每次 Agent 运行、每轮模型调用和工具调用，直接以 OTLP 上报 Langfuse。
+基于阿里云 exporter 维护的 fork，**兼容声明为 OpenClaw 2026.11.1–2026.11.5，当前插件版本 0.2.2**。通过 OpenClaw 原生 hooks 采集每次 Agent 运行、每轮模型调用和工具调用，直接以 OTLP 上报 Langfuse。
+
+实际验证版本为 2026.11.1 和 2026.11.5，中间版本未逐一运行验证。
 
 不需要额外部署 Python 接收器，也不依赖 `.trajectory.jsonl` 或读取会话 SQLite。使用独立的 OpenTelemetry provider，不替换网关的全局 provider。
 
@@ -11,8 +13,8 @@
 | 交付物 | 内容 | 安装条件 |
 | --- | --- | --- |
 | GitHub 源码 ZIP / git checkout | TypeScript 源码、依赖锁文件 | 在联网构建机安装依赖并编译，不能直接当成可运行插件 |
-| `openclaw-exporter-to-langfuse-0.2.1.tgz` | 编译产物和插件声明，不含 `node_modules` | 本地包安装仍可能需要访问 npm 下载依赖 |
-| 按安装指南制作的 `openclaw-exporter-to-langfuse-0.2.1-offline.tar.gz` | 编译产物、完整生产依赖、配置说明和自检工具 | 目标机器无需访问 GitHub / npm；需已有 OpenClaw 2026.11.5，并能访问 Langfuse |
+| `openclaw-exporter-to-langfuse-0.2.2.tgz` | 编译产物和插件声明，不含 `node_modules` | 本地包安装仍可能需要访问 npm 下载依赖 |
+| 按安装指南制作的 `openclaw-exporter-to-langfuse-0.2.2-offline.tar.gz` | 编译产物、完整生产依赖、配置说明和自检工具 | 目标机器无需访问 GitHub / npm；需已有 OpenClaw 2026.11.1 或 2026.11.5，并能访问 Langfuse |
 
 离线安装链路：
 
@@ -43,7 +45,7 @@
           "endpoint": "https://<你的-Langfuse-域名>/api/public/otel",
           "headers": { "Authorization": "Basic <base64-public-key-colon-secret-key>" },
           "serviceName": "openclaw-agent",
-          "tags": ["openclaw-2026.11.5"]
+          "tags": ["openclaw"]
         }
       }
     }

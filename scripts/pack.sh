@@ -36,6 +36,7 @@ writeFileSync(join(directory, "build-info.json"), JSON.stringify({
   workingTreeDirty: dirty,
   pluginVersion: pkg.version,
   openclawVersion: pkg.openclaw.build.openclawVersion,
+  openclawCompatibility: pkg.openclaw.compat.pluginApi,
   nodeVersion: process.version,
 }, null, 2) + "\n");
 const files = [`${pkg.name}-${pkg.version}.tgz`, "INSTALLATION.md", "README.md", "VALIDATION.md", "install.sh", "check-runtime.mjs", "build-info.json"];
