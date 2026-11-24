@@ -1,5 +1,20 @@
 # Validation — OpenClaw 2026.11.5
 
+## Outer retry settlement — 0.3.1 (2026-11-24)
+
+The plugin now waits for the public runtime lifecycle event with
+`executionSettled: true`, rather than finalizing on an attempt's `agent_end`.
+The 49 automated tests cover delayed retries, definitive errors, cancellation,
+duplicate terminal events, and experiment result/trace ownership across retries.
+
+An isolated OpenClaw 2026.11.5 gateway used a local OpenAI-compatible model
+fixture that disconnected the first four HTTP requests and answered the fifth.
+The real host retried under one run ID. Official Langfuse CLI readback confirmed
+one Agent, five ReAct steps, four ERROR generations, one successful generation,
+and the same final answer in the Agent, SDK experiment item, and plugin result.
+Trace: `1c32eff2ce6835c2253bedee76e8273b`; experiment: `83dd207125031c62`.
+The model fixture is test-only; the plugin still exports directly to Langfuse.
+
 ## SDK experiment context integration — 2026-11-24
 
 The 0.3.0 implementation was tested against isolated OpenClaw **2026.11.1**

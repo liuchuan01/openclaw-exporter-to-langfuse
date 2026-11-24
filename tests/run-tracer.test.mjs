@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createRunTracer } from "../dist/run-tracer.js";
 
-function fixture(options = {}) {
+function fixture({ autoSettle = true, ...options } = {}) {
   const spans = new Map();
   let clock = 1000;
   const tracer = createRunTracer(
@@ -26,6 +26,17 @@ function fixture(options = {}) {
   const emit = (name, event = {}, runId = "run", sessionKey = runId) => {
     clock += 10;
     tracer.handle(name, event, { runId, sessionKey, agentId: "main" });
+    if (autoSettle && name === "agent_end") {
+      tracer.handleAgentEvent({
+        runId,
+        stream: "lifecycle",
+        data: {
+          phase: event.success === false ? "error" : "end",
+          executionSettled: true,
+          error: event.error,
+        },
+      });
+    }
   };
   const message = (value, sessionKey = "run") =>
     emit("before_message_write", { message: value }, undefined, sessionKey);
@@ -623,15 +634,114 @@ test("duplicate tool call IDs across models and mismatched tool names are not gu
   }
 });
 
-
 test("trace records the actual host version without assuming the build version", async () => {
   for (const version of ["2026.11.1", "2026.11.5", undefined]) {
     const f = fixture({ openclawVersion: version });
     f.start();
     f.emit("agent_end", { success: true });
     await f.tracer.stop();
-    const root = [...f.spans.values()].find((span) => span.name === "invoke_agent");
+    const root = [...f.spans.values()].find(
+      (span) => span.name === "invoke_agent",
+    );
     assert.equal(root.attributes["openclaw.version"], version);
-    assert.equal(Object.hasOwn(root.attributes, "openclaw.version"), version !== undefined);
+    assert.equal(
+      Object.hasOwn(root.attributes, "openclaw.version"),
+      version !== undefined,
+    );
+  }
+});
+
+test("outer settlement retains failed attempts and the retried answer in one trace", async () => {
+  const results = [];
+  let now = 1000;
+  const f = fixture({
+    autoSettle: false,
+    now: () => now,
+    onRunFinished: (id, result) => results.push({ id, ...result }),
+  });
+  f.start();
+  f.model("failed");
+  f.emit("model_call_ended", {
+    callId: "failed",
+    outcome: "error",
+    error: "fetch failed",
+  });
+  f.message(
+    assistant([], { stopReason: "error", errorMessage: "fetch failed" }),
+  );
+  f.emit("llm_output", { assistantTexts: [] });
+  f.emit("agent_end", { success: false, error: "fetch failed" });
+  for (const phase of ["finishing", "error", "end"]) {
+    f.tracer.handleAgentEvent({
+      runId: "run",
+      stream: "lifecycle",
+      data: { phase },
+    });
+  }
+  await f.tracer.drain();
+  now += 60_000; // Retry backoff must not be guessed from a fixed grace period.
+  await f.tracer.sweep();
+  assert.equal(results.length, 0);
+  const root = [...f.spans.values()].find((s) => s.type === "agent");
+  assert.equal(root.endTime, undefined);
+  f.start();
+  f.model("retried");
+  f.completed("retried");
+  f.message(assistant([text("recovered answer")]));
+  f.emit("llm_output", { assistantTexts: ["recovered answer"] });
+  f.emit("agent_end", { success: true });
+  await f.tracer.drain();
+  assert.equal(results.length, 0);
+  const terminal = {
+    runId: "run",
+    stream: "lifecycle",
+    data: { phase: "end", executionSettled: true },
+  };
+  f.tracer.handleAgentEvent(terminal);
+  f.tracer.handleAgentEvent(terminal);
+  await f.tracer.drain();
+  assert.equal(results.length, 1);
+  assert.equal(results[0].output, "recovered answer");
+  assert.equal(results[0].error, undefined);
+  assert.equal(io(root, "output"), "recovered answer");
+  assert.equal(root.attributes["langfuse.observation.level"], undefined);
+  const models = [...f.spans.values()].filter((s) => s.type === "model");
+  assert.equal(models.length, 2);
+  assert.equal(models[0].attributes["langfuse.observation.level"], "ERROR");
+  assert.equal(models[1].attributes["langfuse.observation.level"], undefined);
+  assert.equal(
+    [...f.spans.values()].filter((s) => s.type === "agent").length,
+    1,
+  );
+  f.start(); // Late replay cannot reopen the settled run.
+  await f.tracer.drain();
+  assert.equal(results.length, 1);
+});
+
+test("settled error and abort fail the result even without a final agent_end", async () => {
+  for (const data of [
+    { phase: "error", error: "fallback exhausted" },
+    { phase: "end", aborted: true, stopReason: "cancelled" },
+  ]) {
+    const results = [];
+    const f = fixture({
+      autoSettle: false,
+      onRunFinished: (_, result) => results.push(result),
+    });
+    f.start();
+    f.tracer.handleAgentEvent({
+      runId: "other",
+      stream: "lifecycle",
+      data: { ...data, executionSettled: true },
+    });
+    await f.tracer.drain();
+    assert.equal(results.length, 0);
+    f.tracer.handleAgentEvent({
+      runId: "run",
+      stream: "lifecycle",
+      data: { ...data, executionSettled: true },
+    });
+    await f.tracer.drain();
+    assert.equal(results[0].error, data.error ?? data.stopReason);
   }
 });

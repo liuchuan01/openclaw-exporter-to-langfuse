@@ -1,4 +1,4 @@
-# VSE / Langfuse SDK 评测接入（0.3.0）
+# VSE / Langfuse SDK 评测接入（0.3.1）
 
 本功能让 OpenClaw 的 Agent、模型、工具节点接入 Langfuse SDK 已创建的每题 trace，同时传播 experiment 身份和请求级 metadata。问题集由 VSE 维护；SDK 支持 local-data experiments，不必在 Langfuse 维护第二份 Dataset。VSE 与插件各自直接向同一 Langfuse 项目上报。
 
@@ -108,6 +108,8 @@ VSE 保存上面的映射后，调用原生 RPC `agent`，params 原样使用返
 ## 3. 查询：langfuse.agent.result
 
 params：`{"request_id":"eval_20261124_001_q003_attempt1"}`。
+
+0.3.1 起，`agent_end` 只结束一次内部尝试；插件等待宿主 `lifecycle` 事件的 `executionSettled: true` 才完成整次请求。自动重试期间 `status` 保持 `running`，失败尝试与成功重试的节点保留在同一 trace 中，最终失败或取消返回 `failed`。不需要调用方增加等待或回读会话的补丁。
 
 返回相同的关联标识，以及 status；完成后带 `output`、`observationId`（Agent 节点 ID），失败时带 `error`。SDK task 返回 output，使实验题目的实际答案与 Agent 答案一致。
 

@@ -18,6 +18,15 @@ export interface OpenClawPluginApi {
   pluginConfig?: Record<string, unknown>;
   runtime?: {
     version?: string;
+    events?: {
+      onAgentEvent(
+        listener: (event: {
+          runId: string;
+          stream: string;
+          data: Record<string, unknown>;
+        }) => void,
+      ): () => void;
+    };
   };
   registerGatewayMethod?(
     name: string,

@@ -48,6 +48,7 @@ type Run = {
   toolDefinitions?: unknown;
   input: string;
   output?: string;
+  attemptError?: string;
   models: Map<string, Model>;
   tools: Map<string, Tool>;
   failedToolResults: Map<string, { message: Message; at: number }>;
@@ -247,6 +248,8 @@ export function createRunTracer(
     if (name === "llm_input") {
       // A new llm_input can also reset context after compaction/fallback.
       run.awaitingModel = true;
+      run.output = undefined;
+      run.attemptError = undefined;
       run.systemPrompt = event.systemPrompt;
       run.toolDefinitions = event.tools;
       run.history = (event.historyMessages ?? [])
@@ -422,11 +425,9 @@ export function createRunTracer(
           .find((m) => m.role === "assistant");
         if (assistant) run.output = contentText(assistant.content);
       }
-      await finish(
-        run,
-        at,
-        event.success === false ? (event.error ?? "Agent failed") : undefined,
-      );
+      // agent_end closes an attempt, not the outer retry/fallback loop.
+      run.attemptError =
+        event.success === false ? (event.error ?? "Agent failed") : undefined;
     }
   }
 
@@ -504,9 +505,32 @@ export function createRunTracer(
     }
     if (!run || run.closing) return;
     run.lastActivity = at;
-    if (name === "agent_end") run.closing = true;
     const current = run;
     enqueue(current, () => process(current, name, snapshot, at));
+  }
+  function handleAgentEvent(event: {
+    runId: string;
+    stream: string;
+    data: Record<string, unknown>;
+  }) {
+    if (stopped || event.stream !== "lifecycle") return;
+    const data = { ...event.data };
+    if (
+      data.executionSettled !== true ||
+      (data.phase !== "end" && data.phase !== "error")
+    )
+      return;
+    const run = runs.get(event.runId);
+    if (!run || run.closing) return;
+    run.closing = true;
+    const at = now();
+    enqueue(run, () => {
+      const error =
+        data.phase === "error" || data.aborted === true || !!data.error
+          ? String(data.error || data.stopReason || "Agent failed")
+          : run.attemptError;
+      return finish(run, at, error);
+    });
   }
   async function drain() {
     await Promise.all([...runs.values()].map((r) => r.queue));
@@ -516,7 +540,7 @@ export function createRunTracer(
       if (!run.closing && now() - run.lastActivity > maxIdleMs) {
         run.closing = true;
         enqueue(run, () =>
-          finish(run, now(), "Run timed out without agent_end"),
+          finish(run, now(), "Run timed out without execution settlement"),
         );
       }
     await drain();
@@ -532,5 +556,5 @@ export function createRunTracer(
       }
     await drain();
   }
-  return { handle, drain, sweep, stop };
+  return { handle, handleAgentEvent, drain, sweep, stop };
 }

@@ -181,6 +181,32 @@ test("remote SDK root owns every experiment span; concurrent and ordinary traces
       { prompt: "question", historyMessages: [] },
       ctx,
     );
+    if (r === a) {
+      tracer.handle("model_call_started", { callId: "failed-attempt" }, ctx);
+      tracer.handle(
+        "model_call_ended",
+        {
+          callId: "failed-attempt",
+          outcome: "error",
+          errorCategory: "fetch failed",
+        },
+        ctx,
+      );
+      tracer.handle("llm_output", { assistantTexts: [] }, ctx);
+      tracer.handle(
+        "agent_end",
+        { success: false, error: "fetch failed" },
+        ctx,
+      );
+      await tracer.drain();
+      assert.equal(bridge.result(r.request_id).status, "running");
+      assert.equal(sink.getFinishedSpans().length, 0);
+      tracer.handle(
+        "llm_input",
+        { prompt: "question", historyMessages: [] },
+        ctx,
+      );
+    }
     tracer.handle("model_call_started", { callId: "model" }, ctx);
     tracer.handle(
       "model_call_ended",
@@ -219,6 +245,14 @@ test("remote SDK root owns every experiment span; concurrent and ordinary traces
     );
     tracer.handle("llm_output", { assistantTexts: ["answer"] }, ctx);
     tracer.handle("agent_end", { success: true }, ctx);
+    tracer.handleAgentEvent({
+      runId: ctx.runId,
+      stream: "lifecycle",
+      data: {
+        phase: "end",
+        executionSettled: true,
+      },
+    });
   }
   await tracer.stop();
   await exporter.flush();
@@ -228,7 +262,7 @@ test("remote SDK root owns every experiment span; concurrent and ordinary traces
     [b, "2".repeat(32)],
   ]) {
     const group = spans.filter((s) => s.spanContext().traceId === traceId);
-    assert.equal(group.length, 4);
+    assert.equal(group.length, r === a ? 6 : 4);
     const root = group.find((s) => s.name === "invoke_agent");
     assert.equal(root.parentSpanContext.spanId, "a".repeat(16));
     for (const span of group) {
@@ -278,6 +312,14 @@ test("evaluation fails explicitly when the agent observation cannot be created",
   const ctx = { runId: prepared.run_id, sessionKey: prepared.session_key };
   tracer.handle("llm_input", { prompt: "question", historyMessages: [] }, ctx);
   tracer.handle("agent_end", { success: true }, ctx);
+  tracer.handleAgentEvent({
+    runId: ctx.runId,
+    stream: "lifecycle",
+    data: {
+      phase: "end",
+      executionSettled: true,
+    },
+  });
   await tracer.stop();
   assert.equal(bridge.result("q1").status, "failed");
   assert.match(bridge.result("q1").error, /observation could not be created/);

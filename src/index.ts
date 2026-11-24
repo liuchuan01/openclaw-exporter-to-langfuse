@@ -108,11 +108,19 @@ const langfuseTracePlugin: OpenClawPlugin = {
         }
       });
     }
+    const events = api.runtime?.events;
+    if (!events?.onAgentEvent) {
+      throw new Error(
+        "Langfuse tracing requires runtime.events.onAgentEvent for execution settlement",
+      );
+    }
+    let unsubscribe: (() => void) | undefined;
     let timer: ReturnType<typeof setInterval> | undefined;
     api.registerService({
       id: "openclaw-exporter-to-langfuse",
       async start() {
         await exporter.ensureInitialized();
+        unsubscribe = events.onAgentEvent(tracer.handleAgentEvent);
         timer = setInterval(() => {
           void tracer.sweep();
           evaluation?.sweep();
@@ -121,6 +129,7 @@ const langfuseTracePlugin: OpenClawPlugin = {
       },
       async stop() {
         clearInterval(timer);
+        unsubscribe?.();
         await tracer.stop();
         evaluation?.stop();
         await exporter.dispose();
