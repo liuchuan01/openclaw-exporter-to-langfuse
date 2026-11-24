@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.0] - 2026-11-24
+
+### Added
+- Opt-in, authenticated `langfuse.agent.prepare` / `langfuse.agent.result` Gateway methods for SDK experiment context and request metadata.
+- Register context before native Agent admission; return stable admission parameters for retries and isolate each evaluation in its own session.
+- Attach the Agent to the SDK's remote parent, propagate experiment/item identity and whitelisted metadata to every model/tool observation, and return the Agent observation ID and final output.
+- Bound request storage, validate context and metadata, reject conflicting request IDs, and report missing observations explicitly.
+- JS SDK 6.1.1 integration example, Chinese protocol documentation, and live experiment/item API validation on OpenClaw 2026.11.1 and 2026.11.5.
+
+### Notes
+- Disabled by default (`evaluationEnabled: true` opts in). Ordinary tracing and its eight hooks are unchanged.
+- The caller invokes native `agent` itself after preparation; third-party plugins do not bypass the host restriction on runtime Gateway dispatch.
+- Request/result records are in memory, not durable across reloads. VSE must persist and reconcile its own tasks.
+
 ## [0.2.2] - 2026-11-23
 
 ### Changed

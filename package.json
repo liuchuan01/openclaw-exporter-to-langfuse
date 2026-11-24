@@ -1,6 +1,6 @@
 {
   "name": "openclaw-exporter-to-langfuse",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "OpenClaw exporter for reporting AI agent execution traces to Langfuse via OpenTelemetry",
   "type": "module",
   "main": "dist/index.js",
@@ -10,7 +10,8 @@
     "openclaw.plugin.json",
     "VERSION",
     "INSTALLATION.md",
-    "VALIDATION.md"
+    "VALIDATION.md",
+    "EVALUATION.md"
   ],
   "scripts": {
     "build": "tsc",

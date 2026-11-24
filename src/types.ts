@@ -19,6 +19,18 @@ export interface OpenClawPluginApi {
   runtime?: {
     version?: string;
   };
+  registerGatewayMethod?(
+    name: string,
+    handler: (request: {
+      params: Record<string, unknown>;
+      respond(
+        ok: boolean,
+        payload?: unknown,
+        error?: { code: string; message: string },
+      ): void;
+    }) => Promise<void>,
+    options: { scope: "operator.write" },
+  ): void;
   logger: {
     info(message: string): void;
     error(message: string): void;
@@ -76,6 +88,11 @@ export interface SpanData {
   input?: unknown;
   output?: unknown;
   parentSpanId?: string;
+  remoteParent?: {
+    traceId: string;
+    spanId: string;
+    traceFlags: number;
+  };
   traceId?: string;
   spanId?: string;
 }

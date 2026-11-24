@@ -1,6 +1,11 @@
 {
-  "latest": "v0.2.2",
+  "latest": "v0.3.0",
   "compatMatrix": [
+    {
+      "exporterVersion": "v0.3.0",
+      "upgradeNote": "Optional authenticated experiment context registration; VSE calls native agent with the returned admission parameters. Supports OpenClaw 2026.11.1 through 2026.11.5; endpoint versions tested.",
+      "openclawVersion": ">=2026.11.1 <=2026.11.5"
+    },
     {
       "exporterVersion": "v0.2.2",
       "upgradeNote": "Supports OpenClaw 2026.11.1 and 2026.11.5. Install this fork artifact, not upstream OSS packages.",

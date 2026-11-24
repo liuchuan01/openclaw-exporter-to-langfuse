@@ -1,6 +1,6 @@
 # openclaw-exporter-to-langfuse
 
-基于阿里云 exporter 维护的 fork，**兼容声明为 OpenClaw 2026.11.1–2026.11.5，当前插件版本 0.2.2**。通过 OpenClaw 原生 hooks 采集每次 Agent 运行、每轮模型调用和工具调用，直接以 OTLP 上报 Langfuse。
+基于阿里云 exporter 维护的 fork，**兼容声明为 OpenClaw 2026.11.1–2026.11.5，当前插件版本 0.3.0**。通过 OpenClaw 原生 hooks 采集每次 Agent 运行、每轮模型调用和工具调用，直接以 OTLP 上报 Langfuse。
 
 实际验证版本为 2026.11.1 和 2026.11.5，中间版本未逐一运行验证。
 
@@ -13,8 +13,8 @@
 | 交付物 | 内容 | 安装条件 |
 | --- | --- | --- |
 | GitHub 源码 ZIP / git checkout | TypeScript 源码、依赖锁文件 | 在联网构建机安装依赖并编译，不能直接当成可运行插件 |
-| `openclaw-exporter-to-langfuse-0.2.2.tgz` | 编译产物和插件声明，不含 `node_modules` | 本地包安装仍可能需要访问 npm 下载依赖 |
-| 按安装指南制作的 `openclaw-exporter-to-langfuse-0.2.2-offline.tar.gz` | 编译产物、完整生产依赖、配置说明和自检工具 | 目标机器无需访问 GitHub / npm；需已有 OpenClaw 2026.11.1 或 2026.11.5，并能访问 Langfuse |
+| `openclaw-exporter-to-langfuse-0.3.0.tgz` | 编译产物和插件声明，不含 `node_modules` | 本地包安装仍可能需要访问 npm 下载依赖 |
+| 按安装指南制作的 `openclaw-exporter-to-langfuse-0.3.0-offline.tar.gz` | 编译产物、完整生产依赖、配置说明和自检工具 | 目标机器无需访问 GitHub / npm；需已有 OpenClaw 2026.11.1 或 2026.11.5，并能访问 Langfuse |
 
 离线安装链路：
 
@@ -92,6 +92,8 @@ runId 隔离请求，session ID 关联会话。消息写入事件只有 sessionK
 
 保留 `serviceName`、`tags`、`userId`、`debug`、`batchSize`、`flushIntervalMs`、`skillsRoots`、`skillTaggingEnabled`。不要配置 `enabledHooks`，采集所需生命周期事件必须一起启用。插件会采集对话原文、模型提供的 reasoning、工具参数及结果。
 
-静态 tags 可以筛选 trace。**本分支尚未实现 Python SDK experiment 关联及请求级自定义 metadata 透传**；先验证原生 trace 结构，之后再接实验链路。Langfuse score 可关联已上报的 trace / observation ID。
+静态 tags 可以筛选普通 trace。**0.3.0 增加可选的 experiment 关联与请求级 metadata 透传**，配合 VSE 服务端的 Langfuse JS SDK 使用。配置 `evaluationEnabled: true` 后，插件提供鉴权 RPC `langfuse.agent.prepare` 和 `langfuse.agent.result`；调用方先登记上下文，再用返回参数调用原生 `agent`。详见 [评测接入协议](./EVALUATION.md) 与 [JS SDK 示例](https://github.com/liuchuan01/openclaw-exporter-to-langfuse/blob/feat/openclaw-2026-11-5/examples/vse-experiment/README.md)。
+
+默认不启用评测入口，普通请求继续自动上报。Langfuse score 可关联已上报的 trace / observation ID。
 
 开发验证使用 `npm test`，包含 Node 内置测试和 OpenTelemetry 内存 exporter 测试。实测结果见 [VALIDATION.md](./VALIDATION.md)。旧架构教程仅供历史参考，安装说明统一维护在 [INSTALLATION.md](./INSTALLATION.md)。

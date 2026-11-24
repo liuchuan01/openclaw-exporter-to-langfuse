@@ -1,7 +1,7 @@
 {
   "id": "openclaw-exporter-to-langfuse",
   "name": "OpenClaw Exporter to Langfuse",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Export OpenClaw AI agent execution traces to Langfuse via OpenTelemetry",
   "type": "plugin",
   "entry": "./dist/index.js",
@@ -75,6 +75,11 @@
         "type": "boolean",
         "default": false,
         "description": "Enable skill tag detection and emit skill:* tags to Langfuse tool observations."
+      },
+      "evaluationEnabled": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable authenticated langfuse.agent.prepare/result Gateway RPC methods for experiment context propagation."
       }
     }
   }

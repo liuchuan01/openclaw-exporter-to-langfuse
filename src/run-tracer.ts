@@ -8,6 +8,7 @@ import {
 } from "./messages.js";
 import type { LangfuseExporter } from "./langfuse-exporter.js";
 import type { PluginHookContext, SpanData } from "./types.js";
+import type { RequestContext, RunResult } from "./evaluation.js";
 
 export const TRACE_HOOKS = [
   "llm_input",
@@ -22,7 +23,8 @@ export const TRACE_HOOKS = [
 type Exporter = Pick<
   LangfuseExporter,
   "startSpan" | "patchOpenSpanAttributes" | "endSpanById"
->;
+> &
+  Partial<Pick<LangfuseExporter, "getSpanContext">>;
 type Attrs = SpanData["attributes"];
 type Node = { id: string; start: number; end?: number; error?: string };
 type Model = Node & {
@@ -40,6 +42,7 @@ type Run = {
   sessionKey: string;
   agentId: string;
   attrs: Attrs;
+  requestContext?: RequestContext;
   history: Message[];
   systemPrompt?: string;
   toolDefinitions?: unknown;
@@ -65,6 +68,11 @@ export function createRunTracer(
   options: {
     now?: () => number;
     openclawVersion?: string;
+    requestContext?: (
+      runId: string,
+      sessionKey: string,
+    ) => RequestContext | undefined;
+    onRunFinished?: (runId: string, result: RunResult) => void;
     warn?: (message: string) => void;
     tags?: string[];
     userId?: string;
@@ -96,6 +104,9 @@ export function createRunTracer(
         type,
         startTime: node.start,
         parentSpanId: parent?.id,
+        ...(!parent && run.requestContext
+          ? { remoteParent: run.requestContext.remoteParent }
+          : {}),
         attributes: { ...run.attrs, ...attrs },
       },
       node.id,
@@ -218,8 +229,18 @@ export function createRunTracer(
       ...(!run.contextReliable ? meta("contextIncomplete", true) : {}),
     });
     run.root.end = at;
+    const observationId = exporter.getSpanContext?.(run.root.id)?.spanId;
     end(run.root, error);
     cleanup(run);
+    options.onRunFinished?.(run.id, {
+      output: run.output,
+      error:
+        error ??
+        (run.requestContext && !observationId
+          ? "Agent observation could not be created"
+          : undefined),
+      observationId,
+    });
   }
 
   async function process(run: Run, name: string, event: Message, at: number) {
@@ -436,12 +457,15 @@ export function createRunTracer(
       !seen.has(runId)
     ) {
       const sessionKey = String(context.sessionKey ?? event.sessionId ?? runId);
+      const requestContext = options.requestContext?.(runId, sessionKey);
       run = {
         id: runId,
         root: { id: id(), start: at },
         agentId: String(context.agentId ?? "main"),
         sessionKey,
+        requestContext,
         attrs: {
+          ...requestContext?.attributes,
           "langfuse.session.id": String(event.sessionId ?? sessionKey),
           "openclaw.run.id": runId,
           ...(options.openclawVersion

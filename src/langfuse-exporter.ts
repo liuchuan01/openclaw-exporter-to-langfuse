@@ -128,7 +128,10 @@ export class LangfuseExporter {
     if (!this.tracer) return;
 
     const spanKind = this.mapSpanKind(spanData.type);
-    const parentContext = this.resolveParentContext(spanData.parentSpanId);
+    const parentContext = this.resolveParentContext(
+      spanData.parentSpanId,
+      spanData.remoteParent,
+    );
 
     const genAiSpanKind = this.mapGenAiSpanKind(spanData.type);
     const spanAttrs = this.flattenAttributes(spanData.attributes);
@@ -202,7 +205,10 @@ export class LangfuseExporter {
     if (!this.tracer) return;
 
     const spanKind = this.mapSpanKind(spanData.type);
-    const parentContext = this.resolveParentContext(spanData.parentSpanId);
+    const parentContext = this.resolveParentContext(
+      spanData.parentSpanId,
+      spanData.remoteParent,
+    );
 
     const exportGenAiSpanKind = this.mapGenAiSpanKind(spanData.type);
     const exportSpanAttrs = this.flattenAttributes(spanData.attributes);
@@ -322,12 +328,22 @@ export class LangfuseExporter {
     return result;
   }
 
-  private resolveParentContext(parentSpanId?: string): ReturnType<typeof context.active> {
+  getSpanContext(spanId: string) {
+    return this.openSpans.get(spanId)?.spanContext();
+  }
+
+  private resolveParentContext(
+    parentSpanId?: string,
+    remoteParent?: SpanData["remoteParent"],
+  ): ReturnType<typeof context.active> {
     if (parentSpanId) {
       const parentSpan = this.openSpans.get(parentSpanId);
       if (parentSpan) {
         return trace.setSpan(ROOT_CONTEXT, parentSpan);
       }
+    }
+    if (remoteParent) {
+      return trace.setSpanContext(ROOT_CONTEXT, { ...remoteParent, isRemote: true });
     }
     return ROOT_CONTEXT;
   }

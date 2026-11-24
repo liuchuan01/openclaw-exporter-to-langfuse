@@ -65,7 +65,7 @@ Run ID controls trace ownership; session ID groups conversation runs. Because me
 
 `endpoint` and `headers.Authorization` are required. Existing `serviceName`, `tags`, `userId`, `debug`, `batchSize`, `flushIntervalMs`, `skillsRoots` and `skillTaggingEnabled` settings remain supported. Omit `enabledHooks`: the lifecycle hooks must be enabled together.
 
-Static `tags` can filter these traces. **Python SDK experiment association and per-request custom metadata propagation are not implemented in this branch.** This change establishes and validates the native trace structure first. Langfuse scores can reference the exported trace and observation IDs.
+Static `tags` can filter these traces. **Optional experiment association and per-request metadata propagation are available with `evaluationEnabled: true`.** See [EVALUATION.md](./EVALUATION.md) and the [JS SDK example](https://github.com/liuchuan01/openclaw-exporter-to-langfuse/blob/feat/openclaw-2026-11-5/examples/vse-experiment/README.md). Langfuse scores can reference the exported trace and observation IDs.
 
 ## Development
 

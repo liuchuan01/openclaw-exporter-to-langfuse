@@ -12,6 +12,10 @@ import type {
   LangfuseTraceConfig,
 } from "./types.js";
 import { PLUGIN_VERSION } from "./version.js";
+import {
+  createEvaluationBridge,
+  registerEvaluationMethods,
+} from "./evaluation.js";
 
 const langfuseTracePlugin: OpenClawPlugin = {
   id: "openclaw-exporter-to-langfuse",
@@ -69,10 +73,17 @@ const langfuseTracePlugin: OpenClawPlugin = {
       : [];
     const skills = resolveSkillTagDetectionConfig(settings);
     const exporter = new LangfuseExporter(api, config);
+    const evaluation =
+      settings.evaluationEnabled === true
+        ? createEvaluationBridge()
+        : undefined;
+    if (evaluation) registerEvaluationMethods(api, evaluation);
     const tracer = createRunTracer(exporter, {
       userId,
       tags,
       openclawVersion: api.runtime?.version,
+      requestContext: evaluation?.claim,
+      onRunFinished: evaluation?.finish,
       warn: (message) => api.logger.warn(message),
       toolAttributes(name, params): Record<string, string | number | boolean> {
         const detected = skills
@@ -104,12 +115,14 @@ const langfuseTracePlugin: OpenClawPlugin = {
         await exporter.ensureInitialized();
         timer = setInterval(() => {
           void tracer.sweep();
+          evaluation?.sweep();
         }, 60_000);
         timer.unref();
       },
       async stop() {
         clearInterval(timer);
         await tracer.stop();
+        evaluation?.stop();
         await exporter.dispose();
       },
     });

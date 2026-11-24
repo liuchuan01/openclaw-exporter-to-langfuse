@@ -1,5 +1,59 @@
 # Validation — OpenClaw 2026.11.5
 
+## SDK experiment context integration — 2026-11-24
+
+The 0.3.0 implementation was tested against isolated OpenClaw **2026.11.1**
+and **2026.11.5** gateways on Node **24.19.0**. Caller dependencies were the
+actual official JS SDK packages `@langfuse/client`, `@langfuse/core`,
+`@langfuse/tracing`, `@langfuse/otel` **6.1.1**, with OpenTelemetry SDK Node
+**0.212.0** and API **1.9.0**. No production gateway was updated.
+
+The initial direct-dispatch approach was rejected by 11.1: `runtime.gateway.request`
+is limited to bundled/trusted official plugins. The final protocol uses authenticated
+`langfuse.agent.prepare`, then caller-owned native `agent`, followed by
+`langfuse.agent.result`. It does not elevate the plugin's trust classification.
+
+| Host | Experiment ID | Items | Observations per item |
+| --- | --- | --- | --- |
+| 2026.11.1 | `97c1bdc822e1ade3` | 2 | 7, 8 |
+| 2026.11.5 | `9bdc1edc406a2b6e` | 2 | 7, 8 |
+
+Each experiment used two concurrent real DeepSeek tasks and a synthetic local
+file. The test Langfuse project was `cml59fzvw00060507jb00tl93`. SDK and plugin
+exported directly; there was no OTLP receiver or intermediary.
+
+Official Langfuse CLI readback of `experiments`, `experiment-items`, and
+`observations` established:
+
+- Exactly one experiment with two items, retaining expected and actual output.
+- Each item has one SDK root and one OpenClaw Agent child in the SAME trace.
+- Each task has two model observations and two ReAct groups; tools retain IO.
+- Every plugin node has the matching experiment ID, item ID and SDK root ID.
+- `run_code`, `knowledge_version`, VSE item/version metadata and `sdk-experiment`
+  environment are correct across the SDK root and plugin observations.
+- Agent output equals the SDK root output and the result returned to the caller.
+- Model token usage and parent links are present and correct.
+- Runtime inspect on 11.5 reports all eight hooks and the two RPC methods.
+- A read-only authenticated 11.1 caller was denied preparation with
+  `FORBIDDEN: missing scope: operator.write`.
+
+Trace IDs:
+- 11.1: `01fd7375b5f9a4b45d8ac1d3dafee265`, `fa1caa5649b64c0e5c179fdf045ce823`.
+- 11.5: `5d779dfeaf3687ebfd1ca61e2ee6b6f9`, `b9a9457b9e0d2961ed5bcd952e175aba`.
+
+47 local tests cover validation, stable native admission parameters, conflicting
+request reuse, capacity/expiry, shutdown, wrong-session refusal, missing Agent
+observations, remote parent linkage, concurrent experiments, ordinary-request
+isolation and rejected-tool fallback. The model chose an optional read in one
+live missing-file case; live ERROR assertions are not inferred from that case.
+Failure-node semantics remain covered by regression tests and the earlier
+sanitized production replay below.
+
+Known limits: in-memory records do not survive reload; completed means the Agent
+finished, not that asynchronous ingestion or scoring has finished. Local SDK item
+IDs are input-derived by default, so VSE must explicitly handle duplicate inputs.
+No VSE application scheduler or automatic per-node evaluator was installed here.
+
 ## OpenClaw 2026.11.1 compatibility — 2026-11-23
 
 Plugin 0.2.2 was run against an isolated installation of the published OpenClaw
