@@ -1,3 +1,4 @@
+import { createEvaluationStore } from "./evaluation-store.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { OpenClawPluginApi, SpanData } from "./types.js";
 
@@ -121,12 +122,50 @@ export function parseEvaluationRequest(value: unknown): EvaluationRequest {
 
 /** Bind before native admission; look up by runId, never by timing or a shared session. */
 export function createEvaluationBridge(
-  options: { now?: () => number; maxEntries?: number } = {},
+  options: {
+    now?: () => number;
+    maxEntries?: number;
+    resultTtlMs?: number;
+    preparedTimeoutMs?: number;
+    storeDirectory?: string;
+  } = {},
 ) {
   const now = options.now ?? Date.now;
   const entries = new Map<string, RecordEntry>();
   const byRun = new Map<string, RecordEntry>();
   let stopped = false;
+  let ready = !options.storeDirectory;
+  let store: ReturnType<typeof createEvaluationStore> | undefined;
+  const resultTtlMs = options.resultTtlMs ?? 24 * 60 * 60_000;
+  const preparedTimeoutMs = options.preparedTimeoutMs ?? 0;
+  const maxEntries = options.maxEntries ?? 10_000;
+  if (
+    !Number.isSafeInteger(resultTtlMs) ||
+    resultTtlMs <= 0 ||
+    !Number.isSafeInteger(preparedTimeoutMs) ||
+    preparedTimeoutMs < 0 ||
+    !Number.isSafeInteger(maxEntries) ||
+    maxEntries <= 0
+  ) {
+    throw new Error("Invalid evaluation retention or capacity settings");
+  }
+  let storageError: unknown;
+  const save = (entry: RecordEntry) => {
+    try {
+      store?.write(entry.request.request_id, { version: 1, entry });
+    } catch (error) {
+      storageError = error;
+      throw error;
+    }
+  };
+  function requireReady() {
+    if (stopped) throw new Error("Evaluation service is stopping");
+    if (storageError)
+      throw new Error(
+        "Evaluation storage failed; restore storage and restart the plugin",
+      );
+    if (!ready) throw new Error("Evaluation service is starting");
+  }
   const view = (entry: RecordEntry) => ({
     request_id: entry.request.request_id,
     run_id: entry.runId,
@@ -150,25 +189,78 @@ export function createEvaluationBridge(
     for (const [key, entry] of entries) {
       if (
         entry.endedAt === undefined &&
-        now() - entry.createdAt > 30 * 60_000 &&
+        preparedTimeoutMs > 0 &&
+        now() - entry.createdAt > preparedTimeoutMs &&
         !entry.claimed
       ) {
         entry.status = "unknown";
         entry.result = {
           error:
-            "No llm_input observed within 30 minutes; do not silently resubmit",
+            "No llm_input observed within the configured admission wait; do not silently resubmit",
         };
         entry.endedAt = now();
+        save(entry);
       }
-      if (entry.endedAt !== undefined && now() - entry.endedAt > 60 * 60_000) {
+      if (entry.endedAt !== undefined && now() - entry.endedAt > resultTtlMs) {
+        store?.remove(key);
         entries.delete(key);
         byRun.delete(entry.runId);
       }
     }
   }
   return {
-    prepare(raw: unknown) {
+    start() {
+      if (ready) return;
       if (stopped) throw new Error("Evaluation service is stopping");
+      store = createEvaluationStore(options.storeDirectory!);
+      for (const value of store.read()) {
+        const record = object(value);
+        const entry = object(record.entry) as unknown as RecordEntry;
+        if (
+          record.version !== 1 ||
+          !entry.request?.request_id ||
+          !entry.request.observability?.remoteParent?.traceId ||
+          typeof entry.runId !== "string" ||
+          typeof entry.sessionKey !== "string" ||
+          typeof entry.fingerprint !== "string" ||
+          !Number.isFinite(entry.createdAt) ||
+          typeof entry.claimed !== "boolean" ||
+          (entry.endedAt !== undefined && !Number.isFinite(entry.endedAt)) ||
+          (["completed", "failed", "unknown"].includes(entry.status) &&
+            entry.endedAt === undefined) ||
+          (entry.status === "running" && !entry.claimed) ||
+          !["prepared", "running", "completed", "failed", "unknown"].includes(
+            entry.status,
+          )
+        ) {
+          throw new Error(
+            "Invalid persisted evaluation record; restore the store before retrying",
+          );
+        }
+        if (
+          entry.endedAt !== undefined &&
+          now() - entry.endedAt > resultTtlMs
+        ) {
+          store.remove(entry.request.request_id);
+          continue;
+        }
+        if (entry.status === "running") {
+          entry.status = "unknown";
+          entry.endedAt = now();
+          entry.result = {
+            error:
+              "Plugin restarted during execution; check the host and Langfuse, do not resubmit",
+          };
+          save(entry);
+        }
+        entries.set(entry.request.request_id, entry);
+        byRun.set(entry.runId, entry);
+      }
+      ready = true;
+      sweep();
+    },
+    prepare(raw: unknown) {
+      requireReady();
       const request = parseEvaluationRequest(raw);
       const fingerprint = createHash("sha256")
         .update(JSON.stringify(request))
@@ -182,7 +274,7 @@ export function createEvaluationBridge(
           );
         return { ...view(previous), agent_request: agentRequest(previous) };
       }
-      if (entries.size >= (options.maxEntries ?? 1000))
+      if (entries.size >= maxEntries)
         throw new Error("Evaluation capacity reached");
       const runId = randomUUID();
       const entry: RecordEntry = {
@@ -194,22 +286,30 @@ export function createEvaluationBridge(
         claimed: false,
         status: "prepared",
       };
+      save(entry);
       entries.set(request.request_id, entry);
       byRun.set(runId, entry);
       return { ...view(entry), agent_request: agentRequest(entry) };
     },
     result(requestId: unknown) {
+      requireReady();
       sweep();
       const entry = entries.get(string(requestId, "request_id", 100));
       if (!entry)
         throw new Error(
-          "Unknown or expired request_id (results are not durable across reloads)",
+          "Unknown or expired request_id; do not automatically resubmit",
         );
       return view(entry);
     },
     claim(runId: string, sessionKey: string): RequestContext | undefined {
+      requireReady();
       const entry = byRun.get(runId);
-      if (!entry || entry.claimed || entry.endedAt !== undefined)
+      if (
+        !entry ||
+        entry.claimed ||
+        entry.status === "failed" ||
+        entry.status === "completed"
+      )
         return undefined;
       if (entry.sessionKey !== sessionKey) {
         entry.status = "failed";
@@ -217,11 +317,14 @@ export function createEvaluationBridge(
         entry.result = {
           error: "Host session identity differs from the submitted session",
         };
+        save(entry);
         return undefined;
       }
+      entry.endedAt = undefined;
       entry.claimed = true;
       entry.status = "running";
       entry.result = undefined;
+      save(entry);
       return structuredClone(entry.request.observability);
     },
     finish(runId: string, result: RunResult) {
@@ -230,9 +333,21 @@ export function createEvaluationBridge(
       entry.result = { ...result };
       entry.status = result.error ? "failed" : "completed";
       entry.endedAt = now();
+      save(entry);
     },
     sweep,
     stop() {
+      for (const entry of entries.values()) {
+        if (entry.status === "running") {
+          entry.status = "unknown";
+          entry.endedAt = now();
+          entry.result = {
+            error:
+              "Plugin stopped during execution; check the host and Langfuse, do not resubmit",
+          };
+          save(entry);
+        }
+      }
       stopped = true;
       entries.clear();
       byRun.clear();

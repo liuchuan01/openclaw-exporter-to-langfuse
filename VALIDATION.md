@@ -1,5 +1,26 @@
 # Validation — OpenClaw 2026.11.5
 
+## Long tasks and durable evaluation results — 0.4.0 (2026-11-26)
+
+54 automated tests pass. Fake-clock tests cover a model and a tool each silent
+for three hours without prematurely completing the run, then successful final
+settlement. Store tests cover process-loss recovery, graceful-stop unknown state,
+late admission, terminal TTL, capacity, private files, corrupt data and write
+failures. These are simulated elapsed-time tests, not six-hour wall-clock runs.
+
+Real isolated OpenClaw **2026.11.1** and **2026.11.5** gateways ran SDK experiments
+`17bb9faa74e87efa` and `0b5f73be1fe99ec5` in the test Langfuse project. Official CLI
+readback confirmed seven observations per item, including matching Agent output.
+After `plugins reload`, querying the original request ID returned the same
+completed output, run/trace IDs and Agent observation ID on both versions.
+Persistence uses the public `runtime.state.resolveStateDir` API; inspection-only
+plugin registration does not open or mutate the store.
+
+This release does not recover in-flight span state after process loss, extend
+host execution deadlines, or guarantee delivery of OTLP data from a lost process.
+Recovered in-flight evaluations are explicitly unknown and must not be resubmitted
+automatically. Production gateways were not changed during this validation.
+
 ## Outer retry settlement — 0.3.1 (2026-11-24)
 
 The plugin now waits for the public runtime lifecycle event with

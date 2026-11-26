@@ -18,6 +18,7 @@ export interface OpenClawPluginApi {
   pluginConfig?: Record<string, unknown>;
   runtime?: {
     version?: string;
+    state?: { resolveStateDir(): string };
     events?: {
       onAgentEvent(
         listener: (event: {

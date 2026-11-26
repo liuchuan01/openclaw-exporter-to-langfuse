@@ -1,4 +1,4 @@
-# VSE / Langfuse SDK 评测接入（0.3.1）
+# VSE / Langfuse SDK 评测接入（0.4.0）
 
 本功能让 OpenClaw 的 Agent、模型、工具节点接入 Langfuse SDK 已创建的每题 trace，同时传播 experiment 身份和请求级 metadata。问题集由 VSE 维护；SDK 支持 local-data experiments，不必在 Langfuse 维护第二份 Dataset。VSE 与插件各自直接向同一 Langfuse 项目上报。
 
@@ -125,7 +125,26 @@ completed 不代表 Langfuse 已查询可见，更不代表已评分。OTLP 是�
 
 ## 生命周期与评分
 
-进程内最多保存 1000 个登记项，完成/过期结果保留一小时；不淘汰正在执行的记录来接收新请求。插件重启/重载会丢失登记和结果。VSE 必须持久化请求和关联 ID；重载后查不到状态时先核查 Langfuse，不自动重发。长时间运行的任务沿用 tracing 的 20 分钟空闲清理机制。
+0.4.0 不再按“20 分钟没有 hook”结束 trace。模型或工具长时间执行期间保持运行状态，最终由宿主 `executionSettled` 收尾。插件不延长或取消 OpenClaw 自身的执行超时。若宿主永久不发送终态，trace 会一直保留在内存中直到插件停止；排查这类请求应核对宿主，而不是通过轮询次数判断失败。
+
+评测配置写在 `plugins.entries.openclaw-exporter-to-langfuse.config`：
+
+| 配置 | 默认值 | 含义 |
+| --- | --- | --- |
+| `evaluationResultTtlMs` | `86400000` | 从完成或转为 unknown 起保留 24 小时，查询不刷新 TTL，必须大于 0 |
+| `evaluationPreparedTimeoutMs` | `0` | prepare 后等待 llm_input 的时间；0 表示不设排队等待上限 |
+| `evaluationMaxEntries` | `10000` | 保留的登记总数，包括排队、运行中与尚未过期的结果 |
+
+达到容量时拒绝新登记，不淘汰运行中任务或提前删除承诺保留的结果。提高 TTL 时应按每日请求量同步调整容量。若设置排队超时，超时只转为 unknown；记录仍在保留期内时，后续同一 runId 的 llm_input 仍可绑定并完成。
+
+开启 evaluation 后，插件在当前宿主 state 目录的 `plugins/openclaw-exporter-to-langfuse/evaluations/` 持久化登记及结果，使用每请求一个 JSON 文件、原子替换和 0600 文件权限。这里包含问题、答案和请求元数据，应使用持久磁盘并限制目录访问；容器必须挂载宿主 state 目录。同一 state 目录只供一个网关使用。读取损坏的记录会令评测服务启动失败；写入失败后拒绝继续提供成功的评测响应，需修复磁盘问题并重载。
+
+- 仅 VSE 重启或网络重连：继续查询同一个 request_id，不重新 prepare/提交 agent。
+- 插件重启/热重载：已完成或失败的结果恢复查询；尚未开始的登记保留原 runId 和 sessionKey。
+- 重启时仍在执行：返回 unknown，并保留关联 ID。它不等于执行失败，也不会自动重跑。需核查宿主及 Langfuse；本版不重建丢失的内存 span，也不从宿主历史自动回填答案。
+- 结果过期或从未登记：查询返回 Unknown or expired request_id，不能据此断定任务失败或自动重发。
+
+本地结果持久化不等于 Langfuse 已收妥 trace，OTLP 仍为异步发送。0.3.x 的旧内存结果无法在升级时补写；升级前应等待请求完成并让调用方取回结果。
 
 独立题目使用独立会话；本版不提供指定已有会话的多轮评测。问题集版本、知识版本、attempt 等由 VSE 维护；插件不判断这些业务版本是否真实生效。
 

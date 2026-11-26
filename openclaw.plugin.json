@@ -1,7 +1,7 @@
 {
   "id": "openclaw-exporter-to-langfuse",
   "name": "OpenClaw Exporter to Langfuse",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Export OpenClaw AI agent execution traces to Langfuse via OpenTelemetry",
   "type": "plugin",
   "entry": "./dist/index.js",
@@ -80,6 +80,24 @@
         "type": "boolean",
         "default": false,
         "description": "Enable authenticated langfuse.agent.prepare/result Gateway RPC methods for experiment context propagation."
+      },
+      "evaluationResultTtlMs": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 86400000,
+        "description": "Retain terminal evaluation results from completion, in milliseconds. Default 24 hours."
+      },
+      "evaluationPreparedTimeoutMs": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Admission wait before unknown status, in milliseconds. Zero disables the wait limit; late admission can still bind retained requests."
+      },
+      "evaluationMaxEntries": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 10000,
+        "description": "Maximum retained evaluation records. Reject new admissions at capacity; do not evict live or unexpired results."
       }
     }
   }

@@ -1,3 +1,12 @@
+import {
+  mkdtempSync,
+  rmSync,
+  statSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -112,7 +121,12 @@ test("re-preparation after lost admission response keeps the exact native idempo
 
 test("session mismatch fails closed; capacity, expiry and shutdown are bounded", async () => {
   let clock = 1000;
-  const bridge = createEvaluationBridge({ now: () => clock, maxEntries: 1 });
+  const bridge = createEvaluationBridge({
+    now: () => clock,
+    maxEntries: 1,
+    resultTtlMs: 60 * 60_000,
+    preparedTimeoutMs: 30 * 60_000,
+  });
   const result = await bridge.prepare(request());
   assert.throws(() => bridge.prepare(request("q2")), /capacity/);
   assert.equal(bridge.claim(result.run_id, "agent:main:wrong"), undefined);
@@ -323,4 +337,113 @@ test("evaluation fails explicitly when the agent observation cannot be created",
   await tracer.stop();
   assert.equal(bridge.result("q1").status, "failed");
   assert.match(bridge.result("q1").error, /observation could not be created/);
+});
+
+test("durable results survive reload; interrupted runs are unknown, never replayed", () => {
+  const directory = mkdtempSync(join(tmpdir(), "langfuse-eval-"));
+  try {
+    let clock = 0;
+    const options = { storeDirectory: directory, now: () => clock };
+    const first = createEvaluationBridge(options);
+    assert.throws(() => first.result("q1"), /starting/);
+    first.start();
+    const done = first.prepare(request());
+    first.claim(done.run_id, done.session_key);
+    clock = 3 * 60 * 60_000;
+    first.sweep();
+    assert.equal(first.result("q1").status, "running");
+    first.finish(done.run_id, {
+      output: "long answer",
+      observationId: "b".repeat(16),
+    });
+    const interrupted = first.prepare(request("q2"));
+    first.claim(interrupted.run_id, interrupted.session_key);
+    const queued = first.prepare(request("q3"));
+    // A second instance simulates process loss without graceful stop.
+    const recovered = createEvaluationBridge(options);
+    recovered.start();
+    assert.equal(recovered.result("q1").output, "long answer");
+    assert.equal(recovered.result("q1").observationId, "b".repeat(16));
+    assert.equal(recovered.result("q2").status, "unknown");
+    assert.equal(
+      recovered.claim(interrupted.run_id, interrupted.session_key),
+      undefined,
+    );
+    assert.equal(recovered.prepare(request("q2")).run_id, interrupted.run_id);
+    assert.equal(recovered.prepare(request("q3")).run_id, queued.run_id);
+    assert.ok(recovered.claim(queued.run_id, queued.session_key));
+    recovered.stop();
+    const again = createEvaluationBridge(options);
+    again.start();
+    assert.equal(again.result("q3").status, "unknown");
+    clock += 23 * 60 * 60_000;
+    assert.equal(again.result("q1").status, "completed");
+    clock += 2 * 60 * 60_000;
+    assert.throws(() => again.result("q1"), /expired/);
+    assert.equal(
+      readdirSync(directory).filter((f) => f.endsWith(".json")).length,
+      0,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("queued work has no default deadline; a late admission can recover retained unknown", () => {
+  let clock = 0;
+  for (const preparedTimeoutMs of [0, 30 * 60_000]) {
+    clock = 0;
+    const bridge = createEvaluationBridge({
+      now: () => clock,
+      preparedTimeoutMs,
+    });
+    const p = bridge.prepare(request());
+    clock = 3 * 60 * 60_000;
+    assert.equal(
+      bridge.result("q1").status,
+      preparedTimeoutMs ? "unknown" : "prepared",
+    );
+    assert.ok(bridge.claim(p.run_id, p.session_key));
+    assert.equal(bridge.result("q1").status, "running");
+    bridge.finish(p.run_id, { output: "late answer" });
+    assert.equal(bridge.result("q1").output, "late answer");
+  }
+});
+
+test("persistence is private; corrupt records and failed writes fail closed", () => {
+  const directory = mkdtempSync(join(tmpdir(), "langfuse-eval-"));
+  try {
+    const bridge = createEvaluationBridge({ storeDirectory: directory });
+    bridge.start();
+    bridge.prepare(request());
+    const file = join(directory, readdirSync(directory)[0]);
+    assert.equal(statSync(file).mode & 0o777, 0o600);
+    writeFileSync(file, "broken");
+    assert.throws(() =>
+      createEvaluationBridge({ storeDirectory: directory }).start(),
+    );
+    rmSync(directory, { recursive: true });
+    assert.throws(() => bridge.prepare(request("q2")));
+    assert.throws(() => bridge.result("q1"), /storage failed/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("retained completed results count against capacity; reads do not extend expiry", () => {
+  let clock = 0;
+  const bridge = createEvaluationBridge({
+    now: () => clock,
+    resultTtlMs: 100,
+    maxEntries: 1,
+  });
+  const p = bridge.prepare(request());
+  bridge.claim(p.run_id, p.session_key);
+  bridge.finish(p.run_id, { output: "done" });
+  clock = 99;
+  assert.equal(bridge.result("q1").output, "done");
+  assert.throws(() => bridge.prepare(request("q2")), /capacity/);
+  clock = 101;
+  assert.equal(bridge.prepare(request("q2")).status, "prepared");
+  assert.throws(() => bridge.result("q1"), /expired/);
 });

@@ -535,14 +535,8 @@ export function createRunTracer(
   async function drain() {
     await Promise.all([...runs.values()].map((r) => r.queue));
   }
-  async function sweep(maxIdleMs = 20 * 60_000) {
-    for (const run of runs.values())
-      if (!run.closing && now() - run.lastActivity > maxIdleMs) {
-        run.closing = true;
-        enqueue(run, () =>
-          finish(run, now(), "Run timed out without execution settlement"),
-        );
-      }
+  async function sweep() {
+    // Silence is not settlement: a model/tool can legitimately run for hours.
     await drain();
     for (const [key, at] of seen)
       if (now() - at > 20 * 60_000) seen.delete(key);

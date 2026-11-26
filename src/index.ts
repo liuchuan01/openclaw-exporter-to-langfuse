@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import os from "node:os";
 import { LangfuseExporter } from "./langfuse-exporter.js";
 import { createRunTracer, TRACE_HOOKS } from "./run-tracer.js";
@@ -75,7 +76,23 @@ const langfuseTracePlugin: OpenClawPlugin = {
     const exporter = new LangfuseExporter(api, config);
     const evaluation =
       settings.evaluationEnabled === true
-        ? createEvaluationBridge()
+        ? createEvaluationBridge({
+            storeDirectory: join(
+              api.runtime?.state?.resolveStateDir?.() ??
+                (() => {
+                  throw new Error(
+                    "Evaluation persistence requires runtime.state.resolveStateDir",
+                  );
+                })(),
+              "plugins",
+              "openclaw-exporter-to-langfuse",
+              "evaluations",
+            ),
+            resultTtlMs: settings.evaluationResultTtlMs as number | undefined,
+            preparedTimeoutMs: settings.evaluationPreparedTimeoutMs as
+              number | undefined,
+            maxEntries: settings.evaluationMaxEntries as number | undefined,
+          })
         : undefined;
     if (evaluation) registerEvaluationMethods(api, evaluation);
     const tracer = createRunTracer(exporter, {
@@ -119,20 +136,34 @@ const langfuseTracePlugin: OpenClawPlugin = {
     api.registerService({
       id: "openclaw-exporter-to-langfuse",
       async start() {
+        evaluation?.start();
         await exporter.ensureInitialized();
         unsubscribe = events.onAgentEvent(tracer.handleAgentEvent);
         timer = setInterval(() => {
           void tracer.sweep();
-          evaluation?.sweep();
+          try {
+            evaluation?.sweep();
+          } catch (error) {
+            api.logger.error(
+              `[LangfuseTrace] Evaluation cleanup failed: ${String(error)}`,
+            );
+          }
         }, 60_000);
         timer.unref();
       },
       async stop() {
         clearInterval(timer);
         unsubscribe?.();
-        await tracer.stop();
-        evaluation?.stop();
-        await exporter.dispose();
+        await tracer.drain();
+        try {
+          evaluation?.stop();
+        } finally {
+          try {
+            await tracer.stop();
+          } finally {
+            await exporter.dispose();
+          }
+        }
       },
     });
     api.logger.info(

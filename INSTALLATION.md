@@ -1,6 +1,6 @@
 # 本 fork 的安装与离线交付
 
-适用于 `liuchuan01/openclaw-exporter-to-langfuse`，当前插件 **0.3.1**，支持宿主 **OpenClaw 2026.11.1 和 2026.11.5**。上游 npm 包和 OSS 制品不是本 fork，请勿混用。
+适用于 `liuchuan01/openclaw-exporter-to-langfuse`，当前插件 **0.4.0**，支持宿主 **OpenClaw 2026.11.1 和 2026.11.5**。上游 npm 包和 OSS 制品不是本 fork，请勿混用。
 
 离线交付分为两台机器：**联网构建机**准备编译产物和依赖；**离线运行机**加载已准备好的插件。目标机器不需要访问 npm/GitHub，但必须能访问配置的 Langfuse 地址。本文不包含 OpenClaw 本身和模型服务的离线部署。
 
@@ -17,11 +17,11 @@ npm ci --ignore-scripts
 bash scripts/pack.sh
 ```
 
-`pack.sh` 同步版本、编译、运行测试并生成 `release/v0.3.1/`。它会替换本地旧的 `release/` 目录，不会发布或上传制品。交付前请将需要保留的旧包移到仓库外。
+`pack.sh` 同步版本、编译、运行测试并生成 `release/v0.4.0/`。它会替换本地旧的 `release/` 目录，不会发布或上传制品。交付前请将需要保留的旧包移到仓库外。
 
 生成目录包含：
 
-- `openclaw-exporter-to-langfuse-0.3.1.tgz`：编译后的 npm 插件包，**不含运行依赖**。
+- `openclaw-exporter-to-langfuse-0.4.0.tgz`：编译后的 npm 插件包，**不含运行依赖**。
 - `install.sh`、`check-runtime.mjs`：宿主授权、热重载和自检工具。
 - `README.md`、`INSTALLATION.md`、`VALIDATION.md`：说明文档。
 - `build-info.json`：源 commit、工作区状态、Node 版本和兼容版本。
@@ -36,11 +36,11 @@ bash scripts/pack.sh
 ```bash
 set -euo pipefail
 OFFLINE_STAGE=$(mktemp -d)
-OFFLINE_BUNDLE="$OFFLINE_STAGE/openclaw-exporter-to-langfuse-0.3.1-offline"
+OFFLINE_BUNDLE="$OFFLINE_STAGE/openclaw-exporter-to-langfuse-0.4.0-offline"
 mkdir -p "$OFFLINE_BUNDLE/plugin"
 
 # 提取已编译插件，再用源码的锁文件安装精确版本的生产依赖。
-tar -xzf release/v0.3.1/openclaw-exporter-to-langfuse-0.3.1.tgz \
+tar -xzf release/v0.4.0/openclaw-exporter-to-langfuse-0.4.0.tgz \
   -C "$OFFLINE_BUNDLE/plugin" --strip-components=1
 cp package-lock.json "$OFFLINE_BUNDLE/plugin/"
 npm ci --prefix "$OFFLINE_BUNDLE/plugin" --omit=dev --ignore-scripts --no-audit --no-fund
@@ -48,20 +48,20 @@ npm ci --prefix "$OFFLINE_BUNDLE/plugin" --omit=dev --ignore-scripts --no-audit 
 # 确认该目录独立具备加载插件所需的依赖；不连接 Langfuse。
 (cd "$OFFLINE_BUNDLE/plugin" && node --input-type=module -e "await import('./dist/index.js')")
 
-cp release/v0.3.1/{install.sh,check-runtime.mjs,README.md,INSTALLATION.md,VALIDATION.md,EVALUATION.md,build-info.json} "$OFFLINE_BUNDLE/"
+cp release/v0.4.0/{install.sh,check-runtime.mjs,README.md,INSTALLATION.md,VALIDATION.md,EVALUATION.md,build-info.json} "$OFFLINE_BUNDLE/"
 # 重新生成清单，覆盖离线目录中的文件（含生产依赖）。
 (cd "$OFFLINE_BUNDLE" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
-tar -czf release/v0.3.1/openclaw-exporter-to-langfuse-0.3.1-offline.tar.gz \
-  -C "$OFFLINE_STAGE" openclaw-exporter-to-langfuse-0.3.1-offline
-(cd release/v0.3.1 && sha256sum openclaw-exporter-to-langfuse-0.3.1-offline.tar.gz \
-  > openclaw-exporter-to-langfuse-0.3.1-offline.tar.gz.sha256)
+tar -czf release/v0.4.0/openclaw-exporter-to-langfuse-0.4.0-offline.tar.gz \
+  -C "$OFFLINE_STAGE" openclaw-exporter-to-langfuse-0.4.0-offline
+(cd release/v0.4.0 && sha256sum openclaw-exporter-to-langfuse-0.4.0-offline.tar.gz \
+  > openclaw-exporter-to-langfuse-0.4.0-offline.tar.gz.sha256)
 ```
 
 向运行机交付两个文件：
 
 ```text
-openclaw-exporter-to-langfuse-0.3.1-offline.tar.gz
-openclaw-exporter-to-langfuse-0.3.1-offline.tar.gz.sha256
+openclaw-exporter-to-langfuse-0.4.0-offline.tar.gz
+openclaw-exporter-to-langfuse-0.4.0-offline.tar.gz.sha256
 ```
 
 离线包不应包含 `.env`、Langfuse 密钥或客户配置。校验和用于核对传输前后的内容，需与可信渠道提供的清单比较；它不是发布者签名或 ClawHub 评审。
@@ -79,10 +79,10 @@ node --version
 在收到交付文件的目录中执行：
 
 ```bash
-sha256sum -c openclaw-exporter-to-langfuse-0.3.1-offline.tar.gz.sha256
+sha256sum -c openclaw-exporter-to-langfuse-0.4.0-offline.tar.gz.sha256
 mkdir -p "$HOME/openclaw-plugins"
-tar -xzf openclaw-exporter-to-langfuse-0.3.1-offline.tar.gz -C "$HOME/openclaw-plugins"
-cd "$HOME/openclaw-plugins/openclaw-exporter-to-langfuse-0.3.1-offline"
+tar -xzf openclaw-exporter-to-langfuse-0.4.0-offline.tar.gz -C "$HOME/openclaw-plugins"
+cd "$HOME/openclaw-plugins/openclaw-exporter-to-langfuse-0.4.0-offline"
 sha256sum -c SHA256SUMS
 (cd plugin && node --input-type=module -e "await import('./dist/index.js')")
 
@@ -94,7 +94,7 @@ openclaw plugins install --link "$PWD/plugin"
 本地代码包属于非 ClawHub 来源。若宿主要求确认来源，请检查包和提示原因；审核通过后，可显式执行：
 
 ```bash
-openclaw plugins install --link "$PWD/plugin" --force
+openclaw plugins install --link "$PWD/plugin" --force --accept-capabilities
 ```
 
 `--force` 是对本地来源的明确确认，也可能覆盖同 ID 的既有安装；安装脚本不会自动添加它。若遇到安装策略阻断，应按实际策略处理，不要把它当作普通网络错误。旧插件升级请先阅读本文末尾的升级说明。
@@ -161,24 +161,26 @@ openclaw plugins inspect openclaw-exporter-to-langfuse --runtime --json
 
 ## 可访问 npm 的机器：普通本地包安装
 
-若运行机能访问 npm，不需要制作含依赖的目录包。将 `release/v0.3.1/` 整个目录拷贝过去，进入该目录后执行：
+若运行机能访问 npm，不需要制作含依赖的目录包。将 `release/v0.4.0/` 整个目录拷贝过去，进入该目录后执行：
 
 ```bash
 sha256sum -c SHA256SUMS
-openclaw plugins install ./openclaw-exporter-to-langfuse-0.3.1.tgz
+openclaw plugins install ./openclaw-exporter-to-langfuse-0.4.0.tgz
 ```
 
 随后按第 4、5 节配置并运行 `bash ./install.sh`。不要把此流程称为完全离线安装。`install.sh` 也支持一个已经审核的本地 `.tgz` 参数，但只接受包文件，不接受目录或远程地址；它不下载 OSS 安装器，不替用户配置密钥，也不自动加 `--force`。
 
 ## 升级、回滚与卸载
 
-升级前保留原配置、旧包及其安装路径，等运行中的 Agent 请求结束。新离线包解压到新的版本目录，按同样流程校验、`--link` 安装、配置、热重载和验收；如果已有同 ID 安装，确认提示后显式使用 `--force`。不要在网关正在使用的旧目录中直接覆盖 `node_modules` 或代码，也不要同时保留两个有效的同 ID 加载入口。
+升级前保留原配置、旧包及其安装路径，等运行中的 Agent 请求结束。新离线包解压到新的版本目录，将 `plugins.load.paths` 中本插件的旧路径替换为新目录（保留其他插件路径，不能同时保留本插件新旧入口），再按同样流程校验、`--link` 安装、配置、热重载和验收；如果已有同 ID 安装，确认提示后显式使用 `--force`。不要在网关正在使用的旧目录中直接覆盖 `node_modules` 或代码，也不要同时保留两个有效的同 ID 加载入口。
 
 从普通包安装切换到 `--link` 后，通过 `openclaw plugins inspect` 核对实际来源路径、版本和诊断，确保没有旧 extension 路径重复加载。若宿主提示冲突，先保留配置和旧制品，查看 `openclaw plugins uninstall --help` 再清理旧安装记录，不要直接删除整个 extensions 目录。
 
 回滚时重新指向保留的旧版本目录或安装旧包，恢复所需配置，再执行授权、自检和真实请求验证。历史 trace 不会因升级或回滚而重建。卸载仅针对本插件；本 fork 的旧 OSS 卸载脚本保持禁用。
 
 命令依据：[OpenClaw 插件安装文档](https://docs.openclaw.ai/cli/plugins/install)、[固定版本 2026.11.5 的 CLI 源码](https://github.com/openclaw/openclaw/blob/v2026.11.5/src/cli/plugins-cli.ts)。宿主版本变化后需重新验证，不能直接套用本指南。
+
+0.4.0 的评测结果保存在宿主 state 目录，而非插件安装目录；升级时保留 state 目录及其持久磁盘。0.3.x 内存中的旧结果不会迁移，升级前应先让调用方取回结果。
 
 ## 可选：VSE experiment 接入
 

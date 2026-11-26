@@ -1,8 +1,10 @@
 # openclaw-exporter-to-langfuse
 
-基于阿里云 exporter 维护的 fork，**兼容声明为 OpenClaw 2026.11.1–2026.11.5，当前插件版本 0.3.1**。通过 OpenClaw 原生 hooks 采集每次 Agent 运行、每轮模型调用和工具调用，直接以 OTLP 上报 Langfuse。
+基于阿里云 exporter 维护的 fork，**兼容声明为 OpenClaw 2026.11.1–2026.11.5，当前插件版本 0.4.0**。通过 OpenClaw 原生 hooks 采集每次 Agent 运行、每轮模型调用和工具调用，直接以 OTLP 上报 Langfuse。
 
 实际验证版本为 2026.11.1 和 2026.11.5，中间版本未逐一运行验证。
+
+0.4.0 支持长任务等待和评测结果持久化：不再因 20 分钟无 hook 提前收尾，结果默认保留 24 小时，重启后可续查已完成结果。重启时仍在执行的请求返回 `unknown`，不会自动重跑。配置及恢复边界见 [EVALUATION.md](./EVALUATION.md#生命周期与评分)。
 
 不需要额外部署 Python 接收器，也不依赖 `.trajectory.jsonl` 或读取会话 SQLite。使用独立的 OpenTelemetry provider，不替换网关的全局 provider。
 
@@ -13,8 +15,8 @@
 | 交付物 | 内容 | 安装条件 |
 | --- | --- | --- |
 | GitHub 源码 ZIP / git checkout | TypeScript 源码、依赖锁文件 | 在联网构建机安装依赖并编译，不能直接当成可运行插件 |
-| `openclaw-exporter-to-langfuse-0.3.1.tgz` | 编译产物和插件声明，不含 `node_modules` | 本地包安装仍可能需要访问 npm 下载依赖 |
-| 按安装指南制作的 `openclaw-exporter-to-langfuse-0.3.1-offline.tar.gz` | 编译产物、完整生产依赖、配置说明和自检工具 | 目标机器无需访问 GitHub / npm；需已有 OpenClaw 2026.11.1 或 2026.11.5，并能访问 Langfuse |
+| `openclaw-exporter-to-langfuse-0.4.0.tgz` | 编译产物和插件声明，不含 `node_modules` | 本地包安装仍可能需要访问 npm 下载依赖 |
+| 按安装指南制作的 `openclaw-exporter-to-langfuse-0.4.0-offline.tar.gz` | 编译产物、完整生产依赖、配置说明和自检工具 | 目标机器无需访问 GitHub / npm；需已有 OpenClaw 2026.11.1 或 2026.11.5，并能访问 Langfuse |
 
 离线安装链路：
 
@@ -92,7 +94,7 @@ runId 隔离请求，session ID 关联会话。消息写入事件只有 sessionK
 
 保留 `serviceName`、`tags`、`userId`、`debug`、`batchSize`、`flushIntervalMs`、`skillsRoots`、`skillTaggingEnabled`。不要配置 `enabledHooks`，采集所需生命周期事件必须一起启用。插件会采集对话原文、模型提供的 reasoning、工具参数及结果。
 
-静态 tags 可以筛选普通 trace。**0.3.1 增加可选的 experiment 关联与请求级 metadata 透传**，配合 VSE 服务端的 Langfuse JS SDK 使用。配置 `evaluationEnabled: true` 后，插件提供鉴权 RPC `langfuse.agent.prepare` 和 `langfuse.agent.result`；调用方先登记上下文，再用返回参数调用原生 `agent`。详见 [评测接入协议](./EVALUATION.md) 与 [JS SDK 示例](https://github.com/liuchuan01/openclaw-exporter-to-langfuse/blob/feat/openclaw-2026-11-5/examples/vse-experiment/README.md)。
+静态 tags 可以筛选普通 trace。**0.4.0 增加可选的 experiment 关联与请求级 metadata 透传**，配合 VSE 服务端的 Langfuse JS SDK 使用。配置 `evaluationEnabled: true` 后，插件提供鉴权 RPC `langfuse.agent.prepare` 和 `langfuse.agent.result`；调用方先登记上下文，再用返回参数调用原生 `agent`。详见 [评测接入协议](./EVALUATION.md) 与 [JS SDK 示例](https://github.com/liuchuan01/openclaw-exporter-to-langfuse/blob/feat/openclaw-2026-11-5/examples/vse-experiment/README.md)。
 
 默认不启用评测入口，普通请求继续自动上报。Langfuse score 可关联已上报的 trace / observation ID。
 

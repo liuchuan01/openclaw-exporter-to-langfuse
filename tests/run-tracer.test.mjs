@@ -745,3 +745,49 @@ test("settled error and abort fail the result even without a final agent_end", a
     assert.equal(results[0].error, data.error ?? data.stopReason);
   }
 });
+
+test("hours without hooks do not close a live model or tool, and late settlement still completes", async () => {
+  let now = 1000;
+  const results = [];
+  const f = fixture({
+    autoSettle: false,
+    now: () => now,
+    onRunFinished: (_, result) => results.push(result),
+  });
+  f.start();
+  f.model("slow");
+  await f.tracer.drain();
+  now += 3 * 60 * 60_000;
+  await f.tracer.sweep();
+  assert.equal(results.length, 0);
+  f.completed("slow");
+  f.message(
+    assistant([
+      { type: "toolCall", id: "slow-tool", name: "read", arguments: {} },
+    ]),
+  );
+  f.emit("before_tool_call", {
+    toolCallId: "slow-tool",
+    toolName: "read",
+    params: {},
+  });
+  await f.tracer.drain();
+  now += 3 * 60 * 60_000;
+  await f.tracer.sweep();
+  assert.equal(results.length, 0);
+  f.emit("after_tool_call", {
+    toolCallId: "slow-tool",
+    result: { content: [text("result")] },
+  });
+  f.emit("llm_output", { assistantTexts: ["late final answer"] });
+  f.emit("agent_end", { success: true });
+  f.tracer.handleAgentEvent({
+    runId: "run",
+    stream: "lifecycle",
+    data: { phase: "end", executionSettled: true },
+  });
+  await f.tracer.drain();
+  assert.equal(results.length, 1);
+  assert.equal(results[0].output, "late final answer");
+  assert.equal(results[0].error, undefined);
+});
