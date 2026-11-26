@@ -8,6 +8,8 @@
 
 不需要额外部署 Python 接收器，也不依赖 `.trajectory.jsonl` 或读取会话 SQLite。使用独立的 OpenTelemetry provider，不替换网关的全局 provider。
 
+已有旧版的客户请按 **[0.4.0 升级手册](./UPGRADE.md)** 操作，包含加载路径替换、停机升级、持久化验收和回滚。
+
 ## 安装与离线交付
 
 完整中文操作步骤见 **[INSTALLATION.md](./INSTALLATION.md)**，包含构建、离线交付、配置、授权、自检和升级说明。
